@@ -1,0 +1,26 @@
+# ---------------------------------------------------------------------------
+# election-intelligence-2026 — runtime dependencies
+#
+# Pinned to compatible lower bounds. Regenerate a fully locked set for
+# deployment with:  pip freeze > requirements.lock.txt
+# ---------------------------------------------------------------------------
+
+# --- Data engine & processing ---
+duckdb>=1.1,<2.0
+pandas>=2.2,<3.0
+numpy>=1.26,<3.0
+
+# --- Statistical modeling ---
+statsmodels>=0.14,<0.15
+
+# --- Dashboard / UI ---
+streamlit>=1.39,<2.0
+
+# --- LLM / Claude API ---
+anthropic>=0.40,<1.0
+
+# --- Configuration management ---
+pydantic>=2.9,<3.0
+pydantic-settings>=2.5,<3.0
+python-dotenv>=1.0,<2.0
+PyYAML>=6.0,<7.0
