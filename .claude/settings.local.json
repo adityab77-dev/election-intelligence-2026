@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell(python --version)",
-      "PowerShell(python -c \"import pydantic, pydantic_settings; print\\('pydantic', pydantic.__version__\\)\" 2>&1)",
-      "PowerShell(python -m compileall -q src tests 2>&1)"
-    ]
-  }
-}

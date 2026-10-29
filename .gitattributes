@@ -1,0 +1,10 @@
+# Normalise line endings: store everything as LF in the repo.
+# Prevents noisy CRLF warnings on Windows and keeps diffs clean across OSes.
+* text=auto eol=lf
+
+# Explicitly binary (never touched for line endings).
+*.duckdb binary
+*.parquet binary
+*.png binary
+*.jpg binary
+*.ico binary
