@@ -100,6 +100,28 @@ def build_parser() -> argparse.ArgumentParser:
     )
     forecast.set_defaults(func=_cmd_forecast)
 
+    simulate = subparsers.add_parser(
+        "simulate",
+        help="Run the correlated Monte Carlo and compute Senate control. [Phase 6]",
+    )
+    simulate.add_argument(
+        "--sims", type=int, default=None, help="Number of simulations (default 50000)."
+    )
+    simulate.add_argument(
+        "--seed", type=int, default=None, help="Random seed (default 2026)."
+    )
+    simulate.add_argument(
+        "--date",
+        default=None,
+        help="Forecast date YYYY-MM-DD used for on-the-fly forecasts.",
+    )
+    simulate.add_argument(
+        "--no-store",
+        action="store_true",
+        help="Run without persisting the simulation.",
+    )
+    simulate.set_defaults(func=_cmd_simulate)
+
     run = subparsers.add_parser(
         "run",
         help="Run one model tick (worker pipeline). [Phase 5-9]",
@@ -266,6 +288,108 @@ def _cmd_forecast(args: argparse.Namespace) -> int:
             )
             if not args.no_store:
                 engine.persist(db, result)
+    finally:
+        db.close()
+    return 0
+
+
+def _git_short_sha() -> str | None:
+    """Best-effort current git short SHA for run metadata; None if unavailable."""
+    import subprocess
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def _cmd_simulate(args: argparse.Namespace) -> int:
+    """Run the Monte Carlo over the battleground forecasts and report control."""
+    from datetime import date
+
+    from election_intelligence.data.ingestion.polls import BATTLEGROUND_RACES
+    from election_intelligence.data.storage import Database
+    from election_intelligence.forecast import ForecastEngine
+    from election_intelligence.simulate import MonteCarloEngine, SimulationConfig
+
+    forecast_date: date | None = None
+    if args.date:
+        try:
+            forecast_date = date.fromisoformat(args.date)
+        except ValueError:
+            logger.error("invalid --date %r (expected YYYY-MM-DD)", args.date)
+            return 1
+
+    config_kwargs: dict[str, int] = {}
+    if args.sims is not None:
+        config_kwargs["n_simulations"] = args.sims
+    if args.seed is not None:
+        config_kwargs["random_seed"] = args.seed
+    config = SimulationConfig(**config_kwargs)
+
+    db = Database()
+    try:
+        db.migrate()
+        forecast_engine = ForecastEngine()
+        forecasts = []
+        for code, race_id in BATTLEGROUND_RACES.items():
+            stored = db.state_forecasts.latest_for_race(race_id)
+            result = stored or forecast_engine.forecast_race(
+                db, race_id, state_code=code, forecast_date=forecast_date
+            )
+            if result is not None:
+                forecasts.append(result)
+
+        if not forecasts:
+            logger.error(
+                "no forecasts available; run 'load-polls' (and 'forecast') first"
+            )
+            return 1
+
+        engine = MonteCarloEngine(config)
+        code_version = _git_short_sha()
+        if args.no_store:
+            output = engine.simulate(forecasts, code_version=code_version)
+        else:
+            output = engine.run_and_store(db, forecasts, code_version=code_version)
+
+        logger.info("Republican Senate: %.0f%%", output.prob_rep_control * 100)
+        logger.info("Democratic Senate: %.0f%%", output.prob_dem_control * 100)
+        logger.info(
+            "Expected Seats: R %.1f  D %.1f",
+            output.expected_rep_seats,
+            output.expected_dem_seats,
+        )
+        logger.info(
+            "R seats: %d (p10) / %d (median) / %d (p90)",
+            output.rep_seats_p10,
+            output.rep_seats_median,
+            output.rep_seats_p90,
+        )
+        logger.info(
+            "MC std error %.3f pp | convergence delta %.3f pp | %d sims",
+            output.mc_std_error,
+            output.convergence_delta,
+            output.n_simulations,
+        )
+        logger.info("Most influential states:")
+        for item in output.influential_states[:5]:
+            logger.info("  %-4s leverage %+.3f", item["state"], item["leverage"])
+        if not args.no_store:
+            logger.info(
+                "stored run %s (seed %d, code %s)",
+                output.run_id,
+                output.random_seed,
+                output.code_version or "unknown",
+            )
     finally:
         db.close()
     return 0

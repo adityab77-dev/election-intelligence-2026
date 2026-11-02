@@ -178,6 +178,10 @@ class SimulationResult(BaseModel):
     seat_histogram: dict[str, Any] | None = None
     paths: list[Any] | None = None
     conditionals: dict[str, Any] | None = None
+    expected_rep_seats: float | None = None
+    expected_dem_seats: float | None = None
+    convergence_delta: float | None = None
+    influential_states: list[Any] | None = None
     created_at: datetime = Field(default_factory=_utcnow)
 
 

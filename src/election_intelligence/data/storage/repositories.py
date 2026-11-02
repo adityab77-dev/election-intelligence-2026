@@ -203,12 +203,20 @@ class SimulationRunRepository(BaseRepository[SimulationRun]):
     table = "simulation_runs"
     pk = "run_id"
 
+    def latest(self) -> SimulationRun | None:
+        row = self._client.fetch_one(
+            f"SELECT * FROM {self.table} ORDER BY created_at DESC LIMIT 1"
+        )
+        return self._from_row(row) if row is not None else None
+
 
 class SimulationResultRepository(BaseRepository[SimulationResult]):
     model = SimulationResult
     table = "simulation_results"
     pk = "run_id"
-    json_fields = frozenset({"seat_histogram", "paths", "conditionals"})
+    json_fields = frozenset(
+        {"seat_histogram", "paths", "conditionals", "influential_states"}
+    )
 
 
 class ElectionResultRepository(BaseRepository[ElectionResult]):
