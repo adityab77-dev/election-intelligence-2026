@@ -10,12 +10,13 @@ name = "election-intelligence-2026"
 version = "0.1.0"
 description = "A Python platform for election forecasting and analysis."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [{ name = "Aditya Botta", email = "adityabotta87@gmail.com" }]
 keywords = ["elections", "forecasting", "statistics", "data-science"]
 
 classifiers = [
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Operating System :: OS Independent",
     "Private :: Do Not Upload",
@@ -71,7 +72,7 @@ election_intelligence = ["py.typed"]
 # Ruff — linting & formatting
 # ---------------------------------------------------------------------------
 [tool.ruff]
-target-version = "py312"
+target-version = "py311"
 line-length = 100
 src = ["src", "tests"]
 
@@ -100,7 +101,7 @@ known-first-party = ["election_intelligence"]
 # mypy — static typing
 # ---------------------------------------------------------------------------
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.11"
 packages = ["election_intelligence"]
 mypy_path = "src"
 strict = true

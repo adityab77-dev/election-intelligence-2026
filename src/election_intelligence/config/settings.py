@@ -89,6 +89,37 @@ class ClaudeSettings(BaseModel):
     max_retries: int = Field(default=3, ge=0)
 
 
+class FeedSettings(BaseModel):
+    """Live results-feed client settings.
+
+    The API key is env-only (``EI_FEED__API_KEY``). With no key configured the
+    system falls back to the manual-entry / SoS-scrape path documented in
+    ``REFERENCE_DATA_CHECKLIST.md`` (D.1). ``provider`` selects which adapter
+    the ingestion layer will use once implemented (Phase 9).
+    """
+
+    provider: str = Field(
+        default="manual",
+        description="Results-feed provider: 'ap', 'ddhq', 'sos', or 'manual'.",
+    )
+    api_key: SecretStr | None = Field(default=None)
+    base_url: str | None = Field(default=None)
+    timeout_seconds: float = Field(default=30.0, gt=0)
+    max_retries: int = Field(default=3, ge=0)
+
+
+class AlertSettings(BaseModel):
+    """Alert-delivery settings (Slack, with optional phone push).
+
+    The webhook URL is env-only (``EI_ALERTS__SLACK_WEBHOOK_URL``). With alerts
+    disabled or unconfigured, the alert layer logs instead of sending.
+    """
+
+    enabled: bool = Field(default=True)
+    slack_webhook_url: SecretStr | None = Field(default=None)
+    slack_channel: str | None = Field(default=None)
+
+
 class AppSettings(BaseSettings):
     """Root application settings object.
 
@@ -114,6 +145,8 @@ class AppSettings(BaseSettings):
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     claude: ClaudeSettings = Field(default_factory=ClaudeSettings)
+    feed: FeedSettings = Field(default_factory=FeedSettings)
+    alerts: AlertSettings = Field(default_factory=AlertSettings)
 
     @field_validator("project_root", "data_dir")
     @classmethod

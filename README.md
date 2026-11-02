@@ -8,7 +8,7 @@ A Python platform for election forecasting and analysis.
 
 ## Stack
 
-- **Python 3.12**
+- **Python 3.11+** (developed and tested on 3.11 and 3.12)
 - **DuckDB** — embedded analytical database / storage layer
 - **Pandas · NumPy** — data manipulation
 - **Statsmodels** — statistical modeling (forecasting, to come)
@@ -63,7 +63,7 @@ Nothing in the lower layers imports from the higher ones.
 ## Getting started
 
 ```bash
-# 1. Create and activate a virtual environment (Python 3.12)
+# 1. Create and activate a virtual environment (Python 3.11 or 3.12)
 python -m venv .venv
 .venv\Scripts\activate        # Windows (PowerShell)
 # source .venv/bin/activate     # macOS / Linux
