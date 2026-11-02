@@ -172,6 +172,14 @@ class PollAggregateRepository(BaseRepository[PollAggregate]):
     def list_by_race(self, race_id: str) -> list[PollAggregate]:
         return self.find("race_id = ?", [race_id])
 
+    def latest_for_race(self, race_id: str) -> PollAggregate | None:
+        row = self._client.fetch_one(
+            f"SELECT * FROM {self.table} WHERE race_id = ? "
+            "ORDER BY as_of DESC, created_at DESC LIMIT 1",
+            [race_id],
+        )
+        return self._from_row(row) if row is not None else None
+
 
 class StateForecastRepository(BaseRepository[StateForecast]):
     model = StateForecast

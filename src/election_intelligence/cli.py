@@ -65,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     poll_average = subparsers.add_parser(
         "poll-average",
-        help="Show the latest simple polling average per battleground. [Phase 3]",
+        help="Show the weighted polling aggregate per battleground. [Phase 4]",
     )
     poll_average.add_argument(
         "--state",
@@ -73,10 +73,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Two-letter state code (default: all battlegrounds).",
     )
     poll_average.add_argument(
-        "--window",
-        type=int,
-        default=21,
-        help="Days back from the latest poll to average (default: 21).",
+        "--breakdown",
+        action="store_true",
+        help="Show the per-poll contribution breakdown.",
     )
     poll_average.set_defaults(func=_cmd_poll_average)
 
@@ -150,11 +149,9 @@ def _cmd_load_polls(args: argparse.Namespace) -> int:
 
 
 def _cmd_poll_average(args: argparse.Namespace) -> int:
-    """Print the latest simple polling average for one or all battlegrounds."""
-    from election_intelligence.data.ingestion.polls import (
-        BATTLEGROUND_RACES,
-        simple_polling_average,
-    )
+    """Print the weighted polling aggregate for one or all battlegrounds."""
+    from election_intelligence.aggregation import PollAggregator
+    from election_intelligence.data.ingestion.polls import BATTLEGROUND_RACES
     from election_intelligence.data.storage import Database
 
     if args.state:
@@ -164,23 +161,39 @@ def _cmd_poll_average(args: argparse.Namespace) -> int:
             return 1
         targets = {code: BATTLEGROUND_RACES[code]}
     else:
-        targets = BATTLEGROUND_RACES
+        targets = dict(BATTLEGROUND_RACES)
 
+    aggregator = PollAggregator()
     db = Database()
     try:
         for code, race_id in targets.items():
-            average = simple_polling_average(db, race_id, window_days=args.window)
-            if average is None:
+            result = aggregator.aggregate_race(db, race_id, state_code=code)
+            if result is None:
                 logger.info("%s (%s): no polls loaded", code, race_id)
-            else:
-                logger.info(
-                    "%s (%s): D%+.1f  (%d poll(s), through %s)",
-                    code,
-                    race_id,
-                    average.mean_margin_dem_minus_rep,
-                    average.n_polls,
-                    average.latest_field_end,
-                )
+                continue
+            logger.info(
+                "%s (%s): weighted D%+.2f  +/-%.2f  (%d polls, N_eff %.1f, through %s)",
+                code,
+                race_id,
+                result.margin,
+                result.std_error,
+                result.poll_count,
+                result.effective_sample_size,
+                result.last_updated,
+            )
+            if args.breakdown:
+                for contribution in result.contributions:
+                    logger.info(
+                        "    %-22s %s  D%+.1f  share %5.1f%%  "
+                        "(n=%s q=%.2f r=%.2f)",
+                        contribution.pollster,
+                        contribution.field_end,
+                        contribution.margin,
+                        contribution.weight_share * 100,
+                        contribution.sample_size,
+                        contribution.weight_quality,
+                        contribution.weight_recency,
+                    )
     finally:
         db.close()
     return 0
