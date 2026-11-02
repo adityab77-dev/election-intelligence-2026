@@ -10,8 +10,10 @@ No concrete sources are implemented yet; this defines the contract only.
 from __future__ import annotations
 
 import abc
+from typing import TYPE_CHECKING
 
-import pandas as pd
+if TYPE_CHECKING:
+    import pandas as pd
 
 
 class DataSource(abc.ABC):

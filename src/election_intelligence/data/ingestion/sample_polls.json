@@ -1,0 +1,49 @@
+[
+  {"race_id": "GA-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": 1.0},
+  {"race_id": "GA-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 0.5},
+  {"race_id": "GA-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 2.0},
+  {"race_id": "GA-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": 1.5},
+  {"race_id": "GA-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 2.5},
+
+  {"race_id": "NC-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": 2.0},
+  {"race_id": "NC-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 1.0},
+  {"race_id": "NC-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 3.0},
+  {"race_id": "NC-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": 2.5},
+  {"race_id": "NC-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 3.5},
+
+  {"race_id": "ME-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": -1.0},
+  {"race_id": "ME-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 0.0},
+  {"race_id": "ME-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 1.0},
+  {"race_id": "ME-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": -0.5},
+  {"race_id": "ME-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 0.5},
+
+  {"race_id": "MI-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": 3.0},
+  {"race_id": "MI-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 4.0},
+  {"race_id": "MI-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 2.5},
+  {"race_id": "MI-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": 3.5},
+  {"race_id": "MI-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 4.5},
+
+  {"race_id": "NH-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": 5.0},
+  {"race_id": "NH-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 4.0},
+  {"race_id": "NH-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 6.0},
+  {"race_id": "NH-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": 5.5},
+  {"race_id": "NH-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 6.5},
+
+  {"race_id": "TX-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": -3.0},
+  {"race_id": "TX-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -2.0},
+  {"race_id": "TX-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -4.0},
+  {"race_id": "TX-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": -2.5},
+  {"race_id": "TX-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -1.5},
+
+  {"race_id": "OH-2026-S", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": -2.0},
+  {"race_id": "OH-2026-S", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -1.0},
+  {"race_id": "OH-2026-S", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -3.0},
+  {"race_id": "OH-2026-S", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": -1.5},
+  {"race_id": "OH-2026-S", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": 0.0},
+
+  {"race_id": "IA-2026", "pollster": "Emerson College", "pollster_grade": "B+", "field_start": "2026-09-12", "field_end": "2026-09-15", "sample_size": 850, "population": "LV", "mode": "online", "margin_dem_minus_rep": -3.0},
+  {"race_id": "IA-2026", "pollster": "Quinnipiac University", "pollster_grade": "A-", "field_start": "2026-09-28", "field_end": "2026-10-01", "sample_size": 1000, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -4.0},
+  {"race_id": "IA-2026", "pollster": "Marist College", "pollster_grade": "A", "field_start": "2026-10-11", "field_end": "2026-10-14", "sample_size": 900, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -2.0},
+  {"race_id": "IA-2026", "pollster": "SurveyUSA", "pollster_grade": "A-", "field_start": "2026-10-19", "field_end": "2026-10-22", "sample_size": 700, "population": "RV", "mode": "online", "margin_dem_minus_rep": -3.5},
+  {"race_id": "IA-2026", "pollster": "Suffolk University", "pollster_grade": "B+", "field_start": "2026-10-26", "field_end": "2026-10-29", "sample_size": 800, "population": "LV", "mode": "phone", "margin_dem_minus_rep": -2.5}
+]

@@ -52,6 +52,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     init_db.set_defaults(func=_cmd_init_db)
 
+    load_polls = subparsers.add_parser(
+        "load-polls",
+        help="Ingest MVP polling data into the database. [Phase 3]",
+    )
+    load_polls.add_argument(
+        "--file",
+        default=None,
+        help="JSON file of polls (defaults to the bundled MVP sample).",
+    )
+    load_polls.set_defaults(func=_cmd_load_polls)
+
+    poll_average = subparsers.add_parser(
+        "poll-average",
+        help="Show the latest simple polling average per battleground. [Phase 3]",
+    )
+    poll_average.add_argument(
+        "--state",
+        default=None,
+        help="Two-letter state code (default: all battlegrounds).",
+    )
+    poll_average.add_argument(
+        "--window",
+        type=int,
+        default=21,
+        help="Days back from the latest poll to average (default: 21).",
+    )
+    poll_average.set_defaults(func=_cmd_poll_average)
+
     run = subparsers.add_parser(
         "run",
         help="Run one model tick (worker pipeline). [Phase 5-9]",
@@ -94,6 +122,65 @@ def _cmd_init_db(args: argparse.Namespace) -> int:
         logger.info("database ready at %s (applied %d migration(s))", db.path, len(applied))
         for table, n in db.table_counts().items():
             logger.info("  %-20s %d rows", table, n)
+    finally:
+        db.close()
+    return 0
+
+
+def _cmd_load_polls(args: argparse.Namespace) -> int:
+    """Ingest polling data (reference seeds loaded first if the DB is empty)."""
+    from election_intelligence.data.ingestion.polls import PollIngestor
+    from election_intelligence.data.storage import Database, SeedLoader
+
+    db = Database()
+    try:
+        db.migrate()
+        if db.senate_races.count() == 0:
+            logger.info("no races found; loading reference seeds first")
+            SeedLoader(db).load_all()
+        report = PollIngestor(db).ingest_file(args.file)
+        logger.info(
+            "ingested %d poll(s), rejected %d", report.ingested, report.rejected
+        )
+        for identifier, errors in report.errors:
+            logger.warning("  rejected %s: %s", identifier, "; ".join(errors))
+    finally:
+        db.close()
+    return 0
+
+
+def _cmd_poll_average(args: argparse.Namespace) -> int:
+    """Print the latest simple polling average for one or all battlegrounds."""
+    from election_intelligence.data.ingestion.polls import (
+        BATTLEGROUND_RACES,
+        simple_polling_average,
+    )
+    from election_intelligence.data.storage import Database
+
+    if args.state:
+        code = args.state.upper()
+        if code not in BATTLEGROUND_RACES:
+            logger.error("%s is not an MVP battleground state", code)
+            return 1
+        targets = {code: BATTLEGROUND_RACES[code]}
+    else:
+        targets = BATTLEGROUND_RACES
+
+    db = Database()
+    try:
+        for code, race_id in targets.items():
+            average = simple_polling_average(db, race_id, window_days=args.window)
+            if average is None:
+                logger.info("%s (%s): no polls loaded", code, race_id)
+            else:
+                logger.info(
+                    "%s (%s): D%+.1f  (%d poll(s), through %s)",
+                    code,
+                    race_id,
+                    average.mean_margin_dem_minus_rep,
+                    average.n_polls,
+                    average.latest_field_end,
+                )
     finally:
         db.close()
     return 0
