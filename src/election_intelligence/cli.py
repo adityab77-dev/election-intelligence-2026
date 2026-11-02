@@ -79,6 +79,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     poll_average.set_defaults(func=_cmd_poll_average)
 
+    forecast = subparsers.add_parser(
+        "forecast",
+        help="Generate state forecast distributions from poll aggregates. [Phase 5]",
+    )
+    forecast.add_argument(
+        "--state",
+        default=None,
+        help="Two-letter state code (default: all battlegrounds).",
+    )
+    forecast.add_argument(
+        "--date",
+        default=None,
+        help="Forecast date YYYY-MM-DD (default: today).",
+    )
+    forecast.add_argument(
+        "--no-store",
+        action="store_true",
+        help="Compute and print forecasts without persisting them.",
+    )
+    forecast.set_defaults(func=_cmd_forecast)
+
     run = subparsers.add_parser(
         "run",
         help="Run one model tick (worker pipeline). [Phase 5-9]",
@@ -194,6 +215,57 @@ def _cmd_poll_average(args: argparse.Namespace) -> int:
                         contribution.weight_quality,
                         contribution.weight_recency,
                     )
+    finally:
+        db.close()
+    return 0
+
+
+def _cmd_forecast(args: argparse.Namespace) -> int:
+    """Generate (and optionally store) forecast distributions per battleground."""
+    from datetime import date
+
+    from election_intelligence.data.ingestion.polls import BATTLEGROUND_RACES
+    from election_intelligence.data.storage import Database
+    from election_intelligence.forecast import ForecastEngine
+
+    if args.state:
+        code = args.state.upper()
+        if code not in BATTLEGROUND_RACES:
+            logger.error("%s is not an MVP battleground state", code)
+            return 1
+        targets = {code: BATTLEGROUND_RACES[code]}
+    else:
+        targets = dict(BATTLEGROUND_RACES)
+
+    forecast_date: date | None = None
+    if args.date:
+        try:
+            forecast_date = date.fromisoformat(args.date)
+        except ValueError:
+            logger.error("invalid --date %r (expected YYYY-MM-DD)", args.date)
+            return 1
+
+    engine = ForecastEngine()
+    db = Database()
+    try:
+        db.migrate()
+        for code, race_id in targets.items():
+            result = engine.forecast_race(
+                db, race_id, state_code=code, forecast_date=forecast_date
+            )
+            if result is None:
+                logger.info("%s (%s): no polls loaded -> no forecast", code, race_id)
+                continue
+            logger.info(
+                "%s (%s): D%+.1f  sigma %.1f  confidence %s",
+                code,
+                race_id,
+                result.mean_margin,
+                result.sigma,
+                result.confidence_level.value,
+            )
+            if not args.no_store:
+                engine.persist(db, result)
     finally:
         db.close()
     return 0

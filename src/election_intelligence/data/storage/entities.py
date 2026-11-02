@@ -64,6 +64,12 @@ class RunStatus(str, Enum):
     FAILED = "failed"
 
 
+class ConfidenceLevel(str, Enum):
+    HIGH = "High"
+    MEDIUM = "Medium"
+    LOW = "Low"
+
+
 # --- Row models --------------------------------------------------------------
 class State(BaseModel):
     state_code: str
@@ -141,15 +147,22 @@ class SimulationRun(BaseModel):
 
 
 class StateForecast(BaseModel):
+    """Per-state pre-election forecast distribution (Phase 5).
+
+    A margin is modelled as Normal(mean_margin, sigma). This is the input the
+    Phase 6 Monte Carlo will consume; it carries no win probabilities itself.
+    """
+
     forecast_id: str = Field(default_factory=_new_id)
-    run_id: str
     race_id: str
+    state_code: str | None = None
     mean_margin: float
-    std_margin: float
-    prob_dem_win: float | None = None
-    prob_rep_win: float | None = None
-    prob_over_50: float | None = None
-    drivers: dict[str, Any] | None = None
+    sigma: float
+    confidence_level: ConfidenceLevel
+    poll_count: int = 0
+    forecast_date: date
+    method: str = "poll_only_v1"
+    inputs_hash: str
     created_at: datetime = Field(default_factory=_utcnow)
 
 
@@ -188,6 +201,7 @@ __all__ = [
     "PollPopulation",
     "SimRegime",
     "RunStatus",
+    "ConfidenceLevel",
     "State",
     "SenateRace",
     "Candidate",

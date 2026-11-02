@@ -26,7 +26,9 @@ def test_initialize_creates_all_tables() -> None:
     db = Database()
     try:
         applied = db.migrate()
-        assert applied == [1]
+        # Migrations apply in order starting at version 1 (resilient to new ones).
+        assert applied and applied[0] == 1
+        assert applied == sorted(applied)
         assert EXPECTED_TABLES <= db.table_names()
     finally:
         db.close()

@@ -185,10 +185,17 @@ class StateForecastRepository(BaseRepository[StateForecast]):
     model = StateForecast
     table = "state_forecasts"
     pk = "forecast_id"
-    json_fields = frozenset({"drivers"})
 
-    def list_by_run(self, run_id: str) -> list[StateForecast]:
-        return self.find("run_id = ?", [run_id])
+    def list_by_race(self, race_id: str) -> list[StateForecast]:
+        return self.find("race_id = ?", [race_id])
+
+    def latest_for_race(self, race_id: str) -> StateForecast | None:
+        row = self._client.fetch_one(
+            f"SELECT * FROM {self.table} WHERE race_id = ? "
+            "ORDER BY forecast_date DESC, created_at DESC LIMIT 1",
+            [race_id],
+        )
+        return self._from_row(row) if row is not None else None
 
 
 class SimulationRunRepository(BaseRepository[SimulationRun]):

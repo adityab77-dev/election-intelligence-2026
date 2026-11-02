@@ -1,11 +1,12 @@
 """Pre-election forecasting regime (Phase 5 — Senate Forecast Engine).
 
-Combines the Phase 4 polling average with a fundamentals prior into a per-state
-margin distribution (``mu``, ``sigma``) plus named drivers, handling RCV/runoff/
-independent special cases. Kept deliberately separate from poll aggregation.
-Deterministic; no LLM. No logic implemented yet.
+Consumes the Phase 4 weighted poll aggregate and produces a per-state forecast
+distribution (``StateForecast``: mean margin, sigma, confidence). Deterministic;
+polls only (no fundamentals, no Monte Carlo, no win probabilities).
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from election_intelligence.forecast.engine import ForecastConfig, ForecastEngine
+
+__all__ = ["ForecastConfig", "ForecastEngine"]

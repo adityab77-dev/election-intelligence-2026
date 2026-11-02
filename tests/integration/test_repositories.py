@@ -12,6 +12,7 @@ pytest.importorskip("duckdb")
 from election_intelligence.data.storage import Database  # noqa: E402
 from election_intelligence.data.storage.entities import (  # noqa: E402
     Candidate,
+    ConfidenceLevel,
     ElectionResult,
     Poll,
     SenateRace,
@@ -85,26 +86,28 @@ def test_foreign_key_violation_is_rejected(db: Database) -> None:
 
 
 @pytest.mark.integration
-def test_state_forecast_json_roundtrip(db: Database) -> None:
-    _seed_race(db)
-    run = SimulationRun(
-        regime="pre_election", n_simulations=50_000, random_seed=42, inputs_hash="h1"
-    )
-    db.simulation_runs.insert(run)
+def test_state_forecast_crud(db: Database) -> None:
+    from datetime import date
 
-    drivers = {"polls": 1.2, "fundamentals": -0.4}
-    db.state_forecasts.insert(
-        StateForecast(
-            run_id=run.run_id,
-            race_id="TX-2026",
-            mean_margin=-1.5,
-            std_margin=5.0,
-            drivers=drivers,
-        )
+    _seed_race(db)
+    forecast = StateForecast(
+        race_id="TX-2026",
+        state_code="TX",
+        mean_margin=-2.0,
+        sigma=3.8,
+        confidence_level="Medium",
+        poll_count=5,
+        forecast_date=date(2026, 11, 1),
+        inputs_hash="abc123",
     )
-    stored = db.state_forecasts.list_by_run(run.run_id)
-    assert len(stored) == 1
-    assert stored[0].drivers == drivers
+    db.state_forecasts.insert(forecast)
+
+    stored = db.state_forecasts.get(forecast.forecast_id)
+    assert stored is not None
+    assert stored.mean_margin == pytest.approx(-2.0)
+    assert stored.sigma == pytest.approx(3.8)
+    assert stored.confidence_level is ConfidenceLevel.MEDIUM
+    assert len(db.state_forecasts.list_by_race("TX-2026")) == 1
 
 
 @pytest.mark.integration
