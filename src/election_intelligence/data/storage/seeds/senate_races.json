@@ -1,0 +1,15 @@
+[
+  {"race_id": "ME-2026", "state_code": "ME", "seat_class": "II", "is_special": false, "counting_rule": "ranked_choice", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "OH-2026-S", "state_code": "OH", "seat_class": "special", "is_special": true, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "TX-2026", "state_code": "TX", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "IA-2026", "state_code": "IA", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "AK-2026", "state_code": "AK", "seat_class": "II", "is_special": false, "counting_rule": "ranked_choice", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "KS-2026", "state_code": "KS", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Toss-up"},
+  {"race_id": "NC-2026", "state_code": "NC", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Lean D"},
+  {"race_id": "GA-2026", "state_code": "GA", "seat_class": "II", "is_special": false, "counting_rule": "majority_runoff", "incumbent_party": "DEM", "expert_rating": "Toss-up"},
+  {"race_id": "MI-2026", "state_code": "MI", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "DEM", "expert_rating": "Lean D"},
+  {"race_id": "NH-2026", "state_code": "NH", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "DEM", "expert_rating": "Lean D"},
+  {"race_id": "NE-2026", "state_code": "NE", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Likely R"},
+  {"race_id": "FL-2026-S", "state_code": "FL", "seat_class": "special", "is_special": true, "counting_rule": "plurality", "incumbent_party": "REP", "expert_rating": "Likely R"},
+  {"race_id": "MN-2026", "state_code": "MN", "seat_class": "II", "is_special": false, "counting_rule": "plurality", "incumbent_party": "DEM", "expert_rating": "Likely D"}
+]

@@ -43,6 +43,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     info.set_defaults(func=_cmd_info)
 
+    init_db = subparsers.add_parser(
+        "init-db",
+        help="Create the database, run migrations, and load seed data. [Phase 2]",
+    )
+    init_db.add_argument(
+        "--no-seed", action="store_true", help="Skip loading seed data."
+    )
+    init_db.set_defaults(func=_cmd_init_db)
+
     run = subparsers.add_parser(
         "run",
         help="Run one model tick (worker pipeline). [Phase 5-9]",
@@ -72,6 +81,21 @@ def _cmd_info(_: argparse.Namespace) -> int:
     logger.info("log_dir=%s", settings.logging.log_dir)
     logger.info("feed_provider=%s", settings.feed.provider)
     logger.info("alerts_enabled=%s", settings.alerts.enabled)
+    return 0
+
+
+def _cmd_init_db(args: argparse.Namespace) -> int:
+    """Create the database, run migrations, and (optionally) load seed data."""
+    from election_intelligence.data.storage import Database
+
+    db = Database()
+    try:
+        applied = db.initialize(seed=not args.no_seed)
+        logger.info("database ready at %s (applied %d migration(s))", db.path, len(applied))
+        for table, n in db.table_counts().items():
+            logger.info("  %-20s %d rows", table, n)
+    finally:
+        db.close()
     return 0
 
 

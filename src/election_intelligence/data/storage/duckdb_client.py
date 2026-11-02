@@ -16,6 +16,8 @@ Connection and query logic beyond these primitives is intentionally deferred.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from types import TracebackType
 from typing import TYPE_CHECKING, Any
@@ -82,6 +84,46 @@ class DuckDBClient:
             return connection.execute(sql, parameters or []).df()
         except Exception as exc:  # pragma: no cover - thin pass-through
             raise StorageError("query execution failed") from exc
+
+    def run(self, sql: str, parameters: list[Any] | None = None) -> None:
+        """Execute a write statement (INSERT/UPDATE/DELETE/DDL)."""
+        connection = self.connect()
+        try:
+            connection.execute(sql, parameters or [])
+        except Exception as exc:
+            raise StorageError(f"statement failed: {sql[:80]}") from exc
+
+    def fetch_all(
+        self, sql: str, parameters: list[Any] | None = None
+    ) -> list[dict[str, Any]]:
+        """Run a query and return rows as a list of column-keyed dicts."""
+        connection = self.connect()
+        try:
+            cursor = connection.execute(sql, parameters or [])
+            columns = [d[0] for d in cursor.description] if cursor.description else []
+            return [dict(zip(columns, row, strict=True)) for row in cursor.fetchall()]
+        except Exception as exc:
+            raise StorageError(f"query failed: {sql[:80]}") from exc
+
+    def fetch_one(
+        self, sql: str, parameters: list[Any] | None = None
+    ) -> dict[str, Any] | None:
+        """Run a query and return the first row as a dict, or ``None``."""
+        rows = self.fetch_all(sql, parameters)
+        return rows[0] if rows else None
+
+    @contextmanager
+    def transaction(self) -> Iterator[duckdb.DuckDBPyConnection]:
+        """Run a block inside a single transaction, rolling back on error."""
+        connection = self.connect()
+        connection.execute("BEGIN TRANSACTION")
+        try:
+            yield connection
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+        else:
+            connection.execute("COMMIT")
 
     def close(self) -> None:
         """Close the connection if it is open."""
