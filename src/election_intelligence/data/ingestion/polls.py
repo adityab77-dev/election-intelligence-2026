@@ -83,6 +83,11 @@ def _deterministic_poll_id(poll: Poll) -> str:
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:16]
 
 
+def deterministic_poll_id(poll: Poll) -> str:
+    """Public: stable natural-key id for a poll (used by source adapters to dedup)."""
+    return _deterministic_poll_id(poll)
+
+
 # --- Reports / results -------------------------------------------------------
 @dataclass
 class IngestionReport:

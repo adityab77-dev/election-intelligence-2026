@@ -57,9 +57,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Ingest MVP polling data into the database. [Phase 3]",
     )
     load_polls.add_argument(
+        "--source",
+        choices=["sample", "wikipedia"],
+        default="sample",
+        help="Poll source: 'sample' (synthetic) or 'wikipedia' (real). [Phase A]",
+    )
+    load_polls.add_argument(
         "--file",
         default=None,
-        help="JSON file of polls (defaults to the bundled MVP sample).",
+        help="JSON file of polls (sample source only; defaults to the bundled MVP sample).",
     )
     load_polls.set_defaults(func=_cmd_load_polls)
 
@@ -180,7 +186,13 @@ def _cmd_load_polls(args: argparse.Namespace) -> int:
         if db.senate_races.count() == 0:
             logger.info("no races found; loading reference seeds first")
             SeedLoader(db).load_all()
-        report = PollIngestor(db).ingest_file(args.file)
+        if args.source == "wikipedia":
+            from election_intelligence.data.ingestion.sources import WikipediaPollSource
+
+            logger.info("fetching real polls from Wikipedia (this may take ~30s)...")
+            report = PollIngestor(db).ingest(WikipediaPollSource().fetch())
+        else:
+            report = PollIngestor(db).ingest_file(args.file)
         logger.info(
             "ingested %d poll(s), rejected %d", report.ingested, report.rejected
         )

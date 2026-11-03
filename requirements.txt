@@ -19,6 +19,9 @@ streamlit>=1.39,<2.0
 # --- LLM / Claude API ---
 anthropic>=0.40,<1.0
 
+# --- HTML parsing (Wikipedia poll-table ingestion) ---
+lxml>=5.0,<7.0
+
 # --- Configuration management ---
 pydantic>=2.9,<3.0
 pydantic-settings>=2.5,<3.0
