@@ -74,6 +74,7 @@ class SimulationOutput:
     prob_rep_control: float
     prob_dem_control: float
     prob_undetermined: float
+    prob_tie: float
     expected_rep_seats: float
     expected_dem_seats: float
     rep_seats_median: int
@@ -105,6 +106,7 @@ class SimulationOutput:
             prob_rep_control=self.prob_rep_control,
             prob_dem_control=self.prob_dem_control,
             prob_undetermined=self.prob_undetermined,
+            prob_tie=self.prob_tie,
             mc_std_error=self.mc_std_error,
             rep_seats_median=self.rep_seats_median,
             rep_seats_p10=self.rep_seats_p10,
@@ -177,6 +179,13 @@ class MonteCarloEngine:
         prob_rep = float(rep_control.mean())
         prob_dem = 1.0 - prob_rep
 
+        # 50-50 Senate: exactly half the chamber each (reporting only).
+        prob_tie = (
+            float((rep_total == total_seats // 2).mean())
+            if total_seats % 2 == 0
+            else 0.0
+        )
+
         expected_rep = float(rep_total.mean())
         expected_dem = float(total_seats - expected_rep)
 
@@ -207,6 +216,7 @@ class MonteCarloEngine:
             prob_rep_control=prob_rep,
             prob_dem_control=prob_dem,
             prob_undetermined=0.0,
+            prob_tie=prob_tie,
             expected_rep_seats=expected_rep,
             expected_dem_seats=expected_dem,
             rep_seats_median=median,

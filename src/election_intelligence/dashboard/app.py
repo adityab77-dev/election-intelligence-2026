@@ -93,11 +93,23 @@ def _render_banner(st: Any, data: dict[str, Any]) -> None:
     )
 
 
+def _tie_probability(result: Any) -> float:
+    """50-50 probability: stored value, else derived from the seat histogram."""
+    stored = getattr(result, "prob_tie", None)
+    if stored is not None:
+        return float(stored)
+    hist = result.seat_histogram or {}
+    return float(hist.get("50", 0.0))
+
+
 def _render_control_and_seats(st: Any, result: Any) -> None:
+    import pandas as pd
+
     st.subheader("Senate Control Probability")
-    col_r, col_d = st.columns(2)
+    col_r, col_d, col_t = st.columns(3)
     col_r.metric("Republican Senate", f"{result.prob_rep_control * 100:.0f}%")
     col_d.metric("Democratic Senate", f"{result.prob_dem_control * 100:.0f}%")
+    col_t.metric("50-50 Senate (tie)", f"{_tie_probability(result) * 100:.1f}%")
 
     st.subheader("Expected Seats")
     col_er, col_ed = st.columns(2)
@@ -106,22 +118,45 @@ def _render_control_and_seats(st: Any, result: Any) -> None:
     if result.expected_dem_seats is not None:
         col_ed.metric("Expected Democratic seats", f"{result.expected_dem_seats:.1f}")
 
-    if result.seat_histogram:
-        import pandas as pd
+    hist = result.seat_histogram or {}
+    if hist:
+        histogram = {int(k): float(v) for k, v in hist.items()}
 
-        hist = result.seat_histogram
         frame = (
             pd.DataFrame(
-                {
-                    "R seats": [int(k) for k in hist],
-                    "Probability": [float(v) for v in hist.values()],
-                }
+                {"R seats": list(histogram), "Probability": list(histogram.values())}
             )
             .sort_values("R seats")
             .set_index("R seats")
         )
         st.caption("Distribution of simulated Republican seats")
         st.bar_chart(frame)
+
+        # Focused table: probability of each seat count 47-53.
+        st.caption("Probability of each Republican seat count (47-53)")
+        focus = pd.DataFrame(
+            {
+                "R seats": list(range(47, 54)),
+                "D seats": [100 - s for s in range(47, 54)],
+                "Probability": [
+                    f"{histogram.get(s, 0.0) * 100:.1f}%" for s in range(47, 54)
+                ],
+            }
+        )
+        st.dataframe(focus, hide_index=True, use_container_width=True)
+
+        # Full seat distribution table.
+        with st.expander("Full seat distribution table"):
+            full = pd.DataFrame(
+                {
+                    "R seats": sorted(histogram),
+                    "D seats": [100 - s for s in sorted(histogram)],
+                    "Probability": [
+                        f"{histogram[s] * 100:.2f}%" for s in sorted(histogram)
+                    ],
+                }
+            )
+            st.dataframe(full, hide_index=True, use_container_width=True)
 
 
 def _render_state_forecasts(st: Any, forecasts: list[Any]) -> None:

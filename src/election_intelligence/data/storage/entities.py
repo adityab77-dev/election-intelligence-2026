@@ -171,6 +171,7 @@ class SimulationResult(BaseModel):
     prob_rep_control: float
     prob_dem_control: float
     prob_undetermined: float = 0.0
+    prob_tie: float | None = None
     mc_std_error: float | None = None
     rep_seats_median: int | None = None
     rep_seats_p10: int | None = None

@@ -97,6 +97,14 @@ def test_different_seed_changes_draws() -> None:
 
 
 @pytest.mark.unit
+def test_tie_probability_is_valid_and_matches_histogram() -> None:
+    out = MonteCarloEngine(CONFIG).simulate(_forecasts(0.0))
+    assert 0.0 <= out.prob_tie <= 1.0
+    # A 50-50 Senate is exactly the 50-R-seat bucket of the distribution.
+    assert out.prob_tie == pytest.approx(out.seat_histogram.get("50", 0.0))
+
+
+@pytest.mark.unit
 def test_diagnostics_and_influential_states() -> None:
     out = MonteCarloEngine(CONFIG).simulate(_forecasts(0.0))
     assert out.mc_std_error > 0.0

@@ -375,6 +375,7 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
 
         logger.info("Republican Senate: %.0f%%", output.prob_rep_control * 100)
         logger.info("Democratic Senate: %.0f%%", output.prob_dem_control * 100)
+        logger.info("50-50 Senate (tie): %.1f%%", output.prob_tie * 100)
         logger.info(
             "Expected Seats: R %.1f  D %.1f",
             output.expected_rep_seats,
