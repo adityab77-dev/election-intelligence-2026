@@ -4,23 +4,18 @@ Run locally with::
 
     streamlit run src/election_intelligence/dashboard/app.py
 
-This is a **read-only** visualization of the forecast already produced by the
-pipeline. It opens DuckDB read-only, reads the latest stored simulation run,
-forecasts, and polls, and renders them. It adds no forecasting logic, no
-election-night logic, and never writes to the database. The poll-aggregates
-table is computed for display from stored polls via the existing Phase 4
-aggregator (a read-only operation).
-
-Populate the data first::
-
-    election-intelligence init-db
-    election-intelligence load-polls
-    election-intelligence forecast
-    election-intelligence simulate
+A **read-only**, presentation-focused view of the forecast the pipeline already
+produced. It opens DuckDB read-only, reads the latest stored simulation and
+forecasts, and renders a polished, card-based layout. It adds **no forecasting
+logic**: per-state win probabilities shown here are read off the existing
+forecast distributions (``P(D win) = Phi(mean / sigma)``), a display transform
+only. The aggregation, forecast, Monte Carlo engines and the database schema are
+untouched.
 """
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from election_intelligence import __version__
@@ -28,39 +23,105 @@ from election_intelligence.utils import configure_logging, get_logger
 
 logger = get_logger(__name__)
 
+# --- palette ----------------------------------------------------------------
+DEM = "#2563eb"
+REP = "#dc2626"
+TIE = "#7c3aed"
+RATINGS = {
+    "Strong D": "#1e3a8a",
+    "Lean D": "#60a5fa",
+    "Toss-Up": "#6b7280",
+    "Lean R": "#f87171",
+    "Strong R": "#991b1b",
+}
+STATE_NAMES = {
+    "GA": "Georgia", "NC": "North Carolina", "ME": "Maine", "MI": "Michigan",
+    "NH": "New Hampshire", "TX": "Texas", "OH": "Ohio", "IA": "Iowa",
+}
 
-def _format_margin(margin: float) -> str:
-    """Render a D-R margin as e.g. 'D +1.8' or 'R +2.4'."""
-    party = "D" if margin >= 0 else "R"
-    return f"{party} +{abs(margin):.1f}"
+CSS = """
+<style>
+.ei-row { display:flex; flex-wrap:wrap; gap:14px; margin:8px 0 4px; }
+.ei-prob { flex:1 1 150px; text-align:center; border-radius:16px; padding:18px 12px; color:#fff; }
+.ei-prob .lbl { font-size:0.72rem; letter-spacing:0.06em; text-transform:uppercase; opacity:0.9; }
+.ei-prob .big { font-size:2.8rem; font-weight:800; line-height:1.05; }
+.ei-prob .sub { font-size:0.8rem; opacity:0.9; }
+.ei-bar { display:flex; height:30px; border-radius:8px; overflow:hidden; font-weight:700;
+          color:#fff; font-size:0.82rem; margin:6px 0 2px; }
+.ei-bar > div { display:flex; align-items:center; justify-content:center; min-width:34px; }
+.ei-card { flex:1 1 220px; background:rgba(128,128,128,0.08);
+           border:1px solid rgba(128,128,128,0.22); border-radius:14px; padding:14px 16px; }
+.ei-card .hd { font-weight:700; font-size:1.05rem; margin-bottom:2px; }
+.ei-card .mut { opacity:0.72; font-size:0.85rem; }
+.ei-chip { display:inline-block; padding:2px 10px; border-radius:999px; font-size:0.74rem;
+           font-weight:700; color:#fff; white-space:nowrap; }
+.ei-meta { display:flex; flex-wrap:wrap; gap:22px; opacity:0.8; font-size:0.85rem; margin:2px 0 10px; }
+.ei-lay { font-size:1.02rem; padding:10px 14px; border-left:4px solid #2563eb;
+          background:rgba(37,99,235,0.07); border-radius:6px; margin:6px 0 4px; }
+table.ei { width:100%; border-collapse:collapse; font-size:0.9rem; }
+table.ei th { text-align:left; padding:9px 10px; border-bottom:2px solid rgba(128,128,128,0.3);
+              font-size:0.72rem; letter-spacing:0.04em; text-transform:uppercase; opacity:0.7; }
+table.ei td { padding:9px 10px; border-bottom:1px solid rgba(128,128,128,0.16); }
+table.ei tr:last-child td { border-bottom:none; }
+.ei-rank { font-weight:800; opacity:0.45; margin-right:8px; }
+</style>
+"""
+
+
+# --- display helpers (no forecasting logic) ---------------------------------
+def _phi(x: float) -> float:
+    return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
+
+
+def _p_dem(mean: float, sigma: float) -> float:
+    return _phi(mean / sigma) if sigma > 0 else (1.0 if mean > 0 else 0.0)
+
+
+def _rating(p_dem: float) -> str:
+    if p_dem >= 0.85:
+        return "Strong D"
+    if p_dem >= 0.60:
+        return "Lean D"
+    if p_dem > 0.40:
+        return "Toss-Up"
+    if p_dem > 0.15:
+        return "Lean R"
+    return "Strong R"
+
+
+def _fmt_margin(mean: float) -> str:
+    return f"{'D' if mean >= 0 else 'R'} +{abs(mean):.1f}"
+
+
+def _state_name(code: str | None) -> str:
+    return STATE_NAMES.get(code or "", code or "—")
+
+
+def _tie_probability(result: Any) -> float:
+    stored = getattr(result, "prob_tie", None)
+    if stored is not None:
+        return float(stored)
+    return float((result.seat_histogram or {}).get("50", 0.0))
 
 
 def _load_data() -> dict[str, Any]:
-    """Read everything the dashboard needs from DuckDB (read-only)."""
     from election_intelligence.aggregation import PollAggregator
     from election_intelligence.data.ingestion.polls import BATTLEGROUND_RACES
     from election_intelligence.data.storage import Database
 
     data: dict[str, Any] = {
-        "error": None,
-        "run": None,
-        "result": None,
-        "forecasts": [],
-        "aggregates": [],
-        "polls_loaded": 0,
-        "last_refreshed": None,
+        "error": None, "run": None, "result": None, "forecasts": [],
+        "aggregates": [], "polls_loaded": 0, "last_refreshed": None,
     }
-
     db = Database(read_only=True)
     try:
-        data["polls_loaded"] = db.polls.count()  # first access -> connects
+        data["polls_loaded"] = db.polls.count()
         refreshed = db.client.fetch_one("SELECT max(ingested_at) AS t FROM polls")
         data["last_refreshed"] = refreshed["t"] if refreshed else None
         run = db.simulation_runs.latest()
         data["run"] = run
         if run is not None:
             data["result"] = db.simulation_results.get(run.run_id)
-
         aggregator = PollAggregator()
         for code, race_id in BATTLEGROUND_RACES.items():
             forecast = db.state_forecasts.latest_for_race(race_id)
@@ -69,221 +130,236 @@ def _load_data() -> dict[str, Any]:
             aggregate = aggregator.aggregate_race(db, race_id, state_code=code)
             if aggregate is not None:
                 data["aggregates"].append(aggregate)
-    except Exception as exc:  # noqa: BLE001 - surface any read error as guidance
+    except Exception as exc:  # noqa: BLE001
         data["error"] = (
-            f"Could not read the database ({exc}). Run the pipeline first: "
-            "`init-db`, `load-polls`, `forecast`, `simulate`."
+            f"Could not read the database ({exc}). The forecast is still being "
+            "prepared — check back in a moment."
         )
     finally:
         db.close()
     return data
 
 
-def _render_banner(st: Any, data: dict[str, Any]) -> None:
+# --- sections ---------------------------------------------------------------
+def _render_header(st: Any, data: dict[str, Any]) -> None:
+    result = data["result"]
     polls = data.get("polls_loaded", 0)
     refreshed = data.get("last_refreshed")
-    if refreshed is not None:
-        timestamp = refreshed.strftime("%Y-%m-%d %H:%M %Z") or refreshed.isoformat()
+    stamp = refreshed.strftime("%Y-%m-%d %H:%M %Z") if refreshed else "unknown"
+
+    p_d = result.prob_dem_control * 100
+    p_r = result.prob_rep_control * 100
+    p_t = _tie_probability(result) * 100
+
+    st.markdown("## 2026 U.S. Senate Forecast")
+    st.markdown(
+        '<div class="ei-row">'
+        f'<div class="ei-prob" style="background:{DEM}"><div class="lbl">Democratic control</div>'
+        f'<div class="big">{p_d:.0f}%</div></div>'
+        f'<div class="ei-prob" style="background:{REP}"><div class="lbl">Republican control</div>'
+        f'<div class="big">{p_r:.0f}%</div></div>'
+        f'<div class="ei-prob" style="background:{TIE}"><div class="lbl">50-50 tie</div>'
+        f'<div class="big">{p_t:.1f}%</div></div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="ei-meta">'
+        f"<span>📊 <b>{polls:,}</b> polls</span>"
+        f"<span>🕒 Last refresh: <b>{stamp}</b></span>"
+        "<span>🌐 Source: <b>Wikipedia MediaWiki polling tables</b></span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    if result.prob_dem_control >= 0.60:
+        favored = "Democrats are currently favored to control the Senate"
+    elif result.prob_dem_control <= 0.40:
+        favored = "Republicans are currently favored to control the Senate"
     else:
-        timestamp = "unknown"
-    st.success(
-        "**🟢 Real Polling Data**\n\n"
-        "Data source: **Wikipedia MediaWiki polling tables**\n\n"
-        f"Last refreshed: **{timestamp}**  ·  Polls ingested: **{polls:,}**"
+        favored = "control of the Senate is a true toss-up"
+    st.markdown(
+        f'<div class="ei-lay">Based on <b>{polls:,}</b> recent polls across 8 '
+        f"battleground states, {favored}.</div>",
+        unsafe_allow_html=True,
     )
 
 
-def _tie_probability(result: Any) -> float:
-    """50-50 probability: stored value, else derived from the seat histogram."""
-    stored = getattr(result, "prob_tie", None)
-    if stored is not None:
-        return float(stored)
-    hist = result.seat_histogram or {}
-    return float(hist.get("50", 0.0))
+def _render_probability_bar(st: Any, result: Any) -> None:
+    p_d = result.prob_dem_control * 100
+    p_r = result.prob_rep_control * 100
+    st.markdown("#### Control probability")
+    st.markdown(
+        '<div class="ei-bar">'
+        f'<div style="width:{p_d:.1f}%;background:{DEM}">D {p_d:.0f}%</div>'
+        f'<div style="width:{p_r:.1f}%;background:{REP}">R {p_r:.0f}%</div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
 
-def _render_control_and_seats(st: Any, result: Any) -> None:
+def _render_expected_seats(st: Any, result: Any) -> None:
     import pandas as pd
 
-    st.subheader("Senate Control Probability")
-    col_r, col_d, col_t = st.columns(3)
-    col_r.metric("Republican Senate", f"{result.prob_rep_control * 100:.0f}%")
-    col_d.metric("Democratic Senate", f"{result.prob_dem_control * 100:.0f}%")
-    col_t.metric("50-50 Senate (tie)", f"{_tie_probability(result) * 100:.1f}%")
+    st.markdown("### Expected Seats")
+    er = result.expected_rep_seats
+    ed = result.expected_dem_seats
+    st.markdown(
+        '<div class="ei-row">'
+        f'<div class="ei-card"><div class="mut">Expected Democratic seats</div>'
+        f'<div class="hd" style="color:{DEM};font-size:1.8rem">{ed:.1f}</div></div>'
+        f'<div class="ei-card"><div class="mut">Expected Republican seats</div>'
+        f'<div class="hd" style="color:{REP};font-size:1.8rem">{er:.1f}</div></div>'
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
-    st.subheader("Expected Seats")
-    col_er, col_ed = st.columns(2)
-    if result.expected_rep_seats is not None:
-        col_er.metric("Expected Republican seats", f"{result.expected_rep_seats:.1f}")
-    if result.expected_dem_seats is not None:
-        col_ed.metric("Expected Democratic seats", f"{result.expected_dem_seats:.1f}")
-
-    hist = result.seat_histogram or {}
+    hist = {int(k): float(v) for k, v in (result.seat_histogram or {}).items()}
     if hist:
-        histogram = {int(k): float(v) for k, v in hist.items()}
+        top = sorted(hist.items(), key=lambda kv: kv[1], reverse=True)[:3]
+        cards = "".join(
+            f'<div class="ei-card" style="text-align:center">'
+            f'<div class="hd" style="font-size:1.5rem">{100 - s}D–{s}R</div>'
+            f'<div class="mut">{p * 100:.0f}% of simulations</div></div>'
+            for s, p in top
+        )
+        st.markdown("#### Most likely outcomes")
+        st.markdown(f'<div class="ei-row">{cards}</div>', unsafe_allow_html=True)
 
         frame = (
-            pd.DataFrame(
-                {"R seats": list(histogram), "Probability": list(histogram.values())}
-            )
+            pd.DataFrame({"R seats": list(hist), "Probability": list(hist.values())})
             .sort_values("R seats")
             .set_index("R seats")
         )
         st.caption("Distribution of simulated Republican seats")
-        st.bar_chart(frame)
-
-        # Focused table: probability of each seat count 47-53.
-        st.caption("Probability of each Republican seat count (47-53)")
-        focus = pd.DataFrame(
-            {
-                "R seats": list(range(47, 54)),
-                "D seats": [100 - s for s in range(47, 54)],
-                "Probability": [
-                    f"{histogram.get(s, 0.0) * 100:.1f}%" for s in range(47, 54)
-                ],
-            }
-        )
-        st.dataframe(focus, hide_index=True, use_container_width=True)
-
-        # Full seat distribution table.
-        with st.expander("Full seat distribution table"):
-            full = pd.DataFrame(
-                {
-                    "R seats": sorted(histogram),
-                    "D seats": [100 - s for s in sorted(histogram)],
-                    "Probability": [
-                        f"{histogram[s] * 100:.2f}%" for s in sorted(histogram)
-                    ],
-                }
-            )
-            st.dataframe(full, hide_index=True, use_container_width=True)
+        st.bar_chart(frame, color=REP)
 
 
-def _render_state_forecasts(st: Any, forecasts: list[Any]) -> None:
-    import pandas as pd
-
-    st.subheader("State Forecasts")
+def _render_battlegrounds(st: Any, forecasts: list[Any]) -> None:
+    st.markdown("### Battleground States")
     if not forecasts:
-        st.info("No forecasts stored. Run `election-intelligence forecast`.")
+        st.info("Forecasts are being prepared.")
         return
-    rows = [
-        {
-            "State": fc.state_code or fc.race_id,
-            "Mean Margin": _format_margin(fc.mean_margin),
-            "Sigma": round(fc.sigma, 2),
-            "Confidence": fc.confidence_level.value,
-            "Poll Count": fc.poll_count,
-        }
-        for fc in forecasts
-    ]
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    ordered = sorted(forecasts, key=lambda f: _p_dem(f.mean_margin, f.sigma), reverse=True)
+    rows = ""
+    for f in ordered:
+        p_d = _p_dem(f.mean_margin, f.sigma)
+        leader = "D" if f.mean_margin >= 0 else "R"
+        lead_color = DEM if leader == "D" else REP
+        p_win = max(p_d, 1 - p_d) * 100
+        rating = _rating(p_d)
+        rows += (
+            "<tr>"
+            f'<td><b>{_state_name(f.state_code)}</b></td>'
+            f'<td style="color:{lead_color};font-weight:700">{leader}</td>'
+            f"<td>{_fmt_margin(f.mean_margin)}</td>"
+            f"<td>{p_win:.0f}%</td>"
+            f"<td>{f.sigma:.1f}</td>"
+            f"<td>{f.poll_count}</td>"
+            f'<td><span class="ei-chip" style="background:{RATINGS[rating]}">{rating}</span></td>'
+            "</tr>"
+        )
+    st.markdown(
+        '<table class="ei"><thead><tr><th>State</th><th>Leader</th><th>Margin</th>'
+        "<th>Win prob.</th><th>Sigma</th><th>Polls</th><th>Rating</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>",
+        unsafe_allow_html=True,
+    )
 
 
-def _render_poll_aggregates(st: Any, aggregates: list[Any]) -> None:
-    import pandas as pd
-
-    st.subheader("Poll Aggregates")
-    if not aggregates:
-        st.info("No polls loaded. Run `election-intelligence load-polls`.")
-        return
-    rows = [
-        {
-            "State": agg.state_code or agg.race_id,
-            "Weighted Margin": _format_margin(agg.margin),
-            "Variance": round(agg.variance, 2),
-            "Poll Count": agg.poll_count,
-            "Last Updated": str(agg.last_updated),
-        }
-        for agg in aggregates
-    ]
-    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
-
-
-def _render_influential_states(st: Any, result: Any) -> None:
-    import pandas as pd
-
-    st.subheader("Most Influential States")
+def _render_influential(st: Any, result: Any, forecasts: list[Any]) -> None:
+    st.markdown("### Why the model thinks this")
     st.caption(
-        "Control leverage = P(R control | R wins state) - P(R control | D wins state)"
+        "Most influential states — how often each one decides which party reaches 50 seats."
     )
-    influential = result.influential_states or []
-    if not influential:
-        st.info("No influence data in the latest run.")
-        return
-    frame = pd.DataFrame(influential)
-    display = frame[["state", "leverage"]].rename(
-        columns={"state": "State", "leverage": "Leverage"}
-    )
-    st.dataframe(display, hide_index=True, use_container_width=True)
-    st.bar_chart(frame.set_index("state")[["leverage"]])
+    by_state = {f.state_code: f for f in forecasts}
+    cards = ""
+    for i, item in enumerate((result.influential_states or [])[:5], start=1):
+        code = item.get("state")
+        name = _state_name(code)
+        fc = by_state.get(code)
+        close = fc is not None and abs(fc.mean_margin) < 4.0
+        if close:
+            why = (
+                f"{name} is close enough that it frequently determines which party "
+                "reaches 50 seats."
+            )
+        else:
+            why = (
+                f"{name} carries enough weight that flipping it meaningfully shifts "
+                "the balance of power."
+            )
+        cards += (
+            f'<div class="ei-card"><div class="hd"><span class="ei-rank">#{i}</span>{name}</div>'
+            f'<div class="mut">{why}</div></div>'
+        )
+    st.markdown(f'<div class="ei-row">{cards}</div>', unsafe_allow_html=True)
 
 
-def _render_metadata(st: Any, run: Any) -> None:
-    st.subheader("Simulation Metadata")
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Simulations", f"{run.n_simulations:,}")
-    col2.metric("Seed", str(run.random_seed))
-    col3.metric("Code Version", run.code_version or "unknown")
-    timestamp = run.finished_at or run.created_at
-    col4.metric("Generated", timestamp.strftime("%Y-%m-%d %H:%M") if timestamp else "-")
+def _render_state_details(st: Any, forecasts: list[Any]) -> None:
+    st.markdown("### State Detail")
+    ordered = sorted(forecasts, key=lambda f: _p_dem(f.mean_margin, f.sigma), reverse=True)
+    cards = ""
+    for f in ordered:
+        p_d = _p_dem(f.mean_margin, f.sigma)
+        leader_party = "Democratic" if f.mean_margin >= 0 else "Republican"
+        p_win = max(p_d, 1 - p_d)
+        accent = DEM if f.mean_margin >= 0 else REP
+        explanation = (
+            f"{leader_party} advantage of {abs(f.mean_margin):.1f} points. "
+            f"Current estimate gives {leader_party}s approximately "
+            f"{p_win * 100:.0f}% odds of winning this race."
+        )
+        cards += (
+            f'<div class="ei-card" style="border-left:5px solid {accent}">'
+            f'<div class="hd">{_state_name(f.state_code)}</div>'
+            f'<div class="mut">Forecast {_fmt_margin(f.mean_margin)} · '
+            f"Win prob. {p_win * 100:.0f}% · {f.confidence_level.value} confidence · "
+            f"{f.poll_count} polls</div>"
+            f'<div style="margin-top:6px">{explanation}</div></div>'
+        )
+    st.markdown(f'<div class="ei-row">{cards}</div>', unsafe_allow_html=True)
 
 
 def _render_methodology(st: Any) -> None:
     st.header("Methodology")
     st.markdown(
         """
-### Poll ingestion
-Polls for the eight Senate battleground states (GA, NC, ME, MI, NH, TX, OH, IA)
-are validated (battleground-only, no post-election dates, plausible margins and
-sample sizes) and stored in DuckDB. Margins are expressed as **D − R** in points.
+This forecast is built in four plain steps, repeated every refresh.
 
-> Polling data is ingested automatically from **Wikipedia MediaWiki polling
-> tables** (CC-BY-SA), selecting each race's current general-election matchup.
+#### 1 · Poll collection
+Recent polls for the eight battleground Senate races are gathered automatically
+from **Wikipedia's polling tables** (which cite the original pollsters). For each
+race we use the current head-to-head matchup between the Democratic and
+Republican candidates.
 
-### Poll weighting
-Each poll's weight is the product of three factors:
-- **Sample size** — `sqrt(min(n, 1500))` (larger polls count more, with a cap).
-- **Recency** — `0.5 ^ (age / 14 days)` (exponential decay, 14-day half-life).
-- **Pollster quality** — a multiplier from the pollster's letter grade
-  (A+ = 1.0 … F = 0.1; unknown = 0.5).
+#### 2 · Poll weighting
+Not every poll counts the same. A poll counts for more when it is **recent**, has
+a **larger sample**, and comes from a **higher-quality pollster**. We combine all
+of a state's polls into one weighted average margin.
 
-The weighted mean is the aggregate margin; its variance combines the sampling
-error of the weighted mean with the weighted dispersion between polls.
+#### 3 · Forecast
+Each state's average becomes a *range* rather than a single number, because polls
+are never exact. The range is wider when there are few polls or they disagree, and
+always allows for the kind of across-the-board polling miss that happens in real
+elections.
 
-### Forecast generation
-Each race becomes a distribution `Normal(mean, sigma)`:
-- **mean** = the weighted poll margin.
-- **sigma** = `sqrt(poll_variance + base_miss² + thin_penalty² + staleness²)`,
-  where `base_miss = 3.5` points is a systematic polling-miss floor, with extra
-  uncertainty for thinly or stale-polled races.
-- **Confidence** (High / Medium / Low) is derived from sigma and poll count.
+#### 4 · Simulation
+We play out the election **tens of thousands of times**. In each run, every state
+gets a slightly different result (with a shared national swing so the states move
+together, like they do in reality), seats are tallied, and we record who controls
+the chamber. The headline percentages are simply **how often each party wins**
+across all those runs.
 
-### Monte Carlo methodology
-50,000+ correlated simulations. In each: one **shared national error**
-(σ = 3.0, all states together) plus an **independent state error** per race.
-The forecast sigma is split into these two components, so correlation is added
-without inflating marginal uncertainty:
+#### Reading the numbers
+- **Control probability** — the share of simulations a party controls the Senate.
+- **50-50 tie** — the chance of an exactly split chamber (which the sitting
+  Vice-President would break).
+- **Win probability** (per state) — how often that state's favorite wins.
+- Nothing here is a certainty; a 70% favorite still loses about three times in ten.
 
-`state_margin = mean + national_error + state_error`
-
-A state goes Republican if its drawn margin < 0. Seats are counted as
-`48 (baseline) + Republican battleground wins`; Republicans control at **≥ 50**
-(VP tiebreak), Democrats at **≥ 51**. The control probability is the share of
-simulations in which each party controls. Runs are reproducible by random seed.
-
-### Assumptions
-- Only the eight battlegrounds are simulated; all other seats are a fixed
-  baseline (48 R / 44 D — the 53-47 Senate minus the battlegrounds' current holders).
-- Errors are Normal (no fat tails); national σ = 3.0, base polling miss = 3.5 pt.
-- Polls are transcribed from Wikipedia (community-maintained); pollster grades
-  come from a static table, not a live ratings feed.
-
-### Limitations
-- **No fundamentals model** (polls only) and **no hierarchical pooling**.
-- **No RCV / runoff modelling** (Maine, Alaska, Georgia resolution rules).
-- **No election-night / live-results** updating.
-- Normal (not Student-t) error terms understate true tail (wave) risk.
-- The non-battleground baseline is fixed, not read from a full Senate roster.
+*Data is community-transcribed from Wikipedia; pollster quality grades come from a
+static reference table. This is an analytical demonstration, not an official forecast.*
 """
     )
 
@@ -292,27 +368,22 @@ def _render_dashboard(st: Any, data: dict[str, Any]) -> None:
     if data["error"]:
         st.error(data["error"])
         return
-
-    result = data["result"]
-    run = data["run"]
+    result, run = data["result"], data["run"]
     if result is None or run is None:
-        st.warning(
-            "No simulation found yet. Run the pipeline: "
-            "`init-db` -> `load-polls` -> `forecast` -> `simulate`."
-        )
-    else:
-        _render_control_and_seats(st, result)
-        st.divider()
+        st.warning("The forecast is being prepared — please refresh in a moment.")
+        _render_battlegrounds(st, data["forecasts"])
+        return
 
-    _render_state_forecasts(st, data["forecasts"])
+    _render_header(st, data)
+    _render_probability_bar(st, result)
     st.divider()
-    _render_poll_aggregates(st, data["aggregates"])
-
-    if result is not None:
-        st.divider()
-        _render_influential_states(st, result)
-        st.divider()
-        _render_metadata(st, run)
+    _render_expected_seats(st, result)
+    st.divider()
+    _render_battlegrounds(st, data["forecasts"])
+    st.divider()
+    _render_influential(st, result, data["forecasts"])
+    st.divider()
+    _render_state_details(st, data["forecasts"])
 
 
 def main() -> None:
@@ -320,23 +391,18 @@ def main() -> None:
     import streamlit as st
 
     configure_logging()
-
     st.set_page_config(
-        page_title="Election Intelligence 2026",
-        page_icon="📊",
-        layout="wide",
+        page_title="2026 Senate Forecast", page_icon="🗳️", layout="wide"
     )
-    st.title("2026 Senate Control Intelligence")
-    st.caption(f"v{__version__} · read-only forecast dashboard")
+    st.markdown(CSS, unsafe_allow_html=True)
 
     data = _load_data()
-    _render_banner(st, data)
-
-    dashboard_tab, methodology_tab = st.tabs(["Dashboard", "Methodology"])
+    dashboard_tab, methodology_tab = st.tabs(["Forecast", "Methodology"])
     with dashboard_tab:
         _render_dashboard(st, data)
     with methodology_tab:
         _render_methodology(st)
+    st.caption(f"2026 Senate Control Intelligence · v{__version__} · read-only")
 
     logger.debug("rendered dashboard")
 
