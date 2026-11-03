@@ -222,5 +222,51 @@ If a paid feed is off the table, the best *free* posture is a near-direct aggreg
 coverage + original-URL provenance + Wikipedia reconciliation — materially lower quality,
 which is the honest cost of "free."
 
-<!-- STEP0.5_RESULT -->
+---
+
+## Step 0.5 — Probe Results & Final Source Recommendation
+
+**Date:** 2026-11-02 · **Method:** live HTTPS probes (Windows cert store) of candidate sources.
+
+### Probe findings
+
+| Probe | Result |
+|-------|--------|
+| **ABC / 538-successor** | ❌ Dead. The 538 polls page returns 365 KB of ABC HTML with **no embedded data endpoint** (no `.csv`/`.json`/`/polls/data/`/`__NEXT_DATA__`). The `fivethirtyeight/data` GitHub repo is **frozen since 2025-02-25** and its `/polls` dir holds only historical *presidential* averages — no Senate, no 2026. |
+| **270toWin** | ❌ No machine-readable feed. The 2026 Senate page's only inline endpoints are Google Maps and a newsletter PHP; poll data is server-rendered HTML → scraping only (unofficial, fragile). |
+| **Open GitHub datasets** | ❌ Not authoritative. Search returned only **hobby repos (0 stars, just-created election-night trackers)**; none are maintained, sourced, or sustainable. |
+| **DDHQ** | ✅ **Viable.** `docs.decisiondeskhq.com` exposes a documented **v4/v5 REST API** with OAuth2 auth and **polling endpoints**. |
+
+### DDHQ API — details (deliverable #4)
+- **Availability:** live, documented API (`docs.decisiondeskhq.com`), with a **testing environment**.
+- **Auth / integration:** OAuth2 client-credentials → bearer token (`POST /api/v4/oauth/token`), then
+  GET JSON. Polling surface includes `/api/v4/polls/base_data/{pollsters,sponsors,types,modes,internals}`
+  plus race/results endpoints (`/race/{id}`, `/races`, `/race-calls`, `/pulse`, `/balance_of_power`).
+  Clean, machine-readable, provenance-rich (pollster/sponsor/mode metadata).
+- **Cost:** subscription; signals for a **trial** tier are present, but **pricing is gated** (login/contact) —
+  not publicly listed. Obtaining it requires the account holder to **request access/trial** (the one step
+  only you can take).
+- **Not yet confirmed (needs credentials):** exact 2026 Senate race-level poll coverage, per-poll field
+  granularity (candidate pct / party / dates / population), grade equivalents, and price — all verifiable
+  once trial credentials are in hand (a short "Step 0.6" against the live endpoints).
+
+### Final recommendation
+**Primary: the DDHQ API** — it is the only source that is simultaneously near-direct, highest-quality,
+fully automatable (OAuth2 + REST JSON), sustainable, and legally licensed, which matches the stated
+"provenance-first, quality over cost" priority. **Secondary (reconciliation + gap-fill + resilience):**
+the Wikipedia MediaWiki API plus the last-good committed snapshot. **Grades:** static pollster-grade
+table if DDHQ's metadata lacks a usable grade — no engine change.
+
+**Decision gate (one external action):** obtain DDHQ **trial credentials**, then run Step 0.6 to confirm
+Senate coverage, fields, and price.
+- If DDHQ confirms out → **DDHQ primary**, Wikipedia secondary. *(Recommended path.)*
+- If DDHQ is unaffordable/insufficient → **Wikipedia primary** (prior decision), snapshot + static grades.
+
+Ruled out as primary by probes: 538/ABC (dead), 270toWin (no feed), hobby GitHub datasets (not
+sustainable), RealClearPolling (no API, ToS), Silver Bulletin (paywalled, no API).
+
+### Architecture (unchanged by this result)
+Pluggable `PollSource` → the chosen primary adapter (DDHQ or Wikipedia) → normalize → dedup →
+existing `PollIngestor` → `polls` table → untouched aggregation/forecast/MC/dashboard. The
+provenance layer stores each poll's original source URL regardless of primary.
 
