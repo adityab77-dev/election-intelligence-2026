@@ -270,3 +270,112 @@ Pluggable `PollSource` → the chosen primary adapter (DDHQ or Wikipedia) → no
 existing `PollIngestor` → `polls` table → untouched aggregation/forecast/MC/dashboard. The
 provenance layer stores each poll's original source URL regardless of primary.
 
+---
+
+## DDHQ Integration Research (deep dive, no credentials)
+
+**API base:** `https://resultsapi.decisiondeskhq.com` · **Docs:** `docs.decisiondeskhq.com`
+**Status probe (2026-11-02):** `GET /api/v4/health` → **200**, `{"last_updated":"2026-11-03…","version":"1.1.11"}`
+— the API is **live and actively updating**. Poll endpoints return **401** without a token (exist, OAuth-gated).
+
+### 1. Polling endpoints
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /api/v4/oauth/token` | OAuth2 — exchange client credentials for a bearer token |
+| `GET /api/v4/polls/averages/metadata` | List poll **averages** (one per contest) — includes office + state → **find Senate races** |
+| `GET /api/v4/polls/averages/{averageId}/polls` | **The individual polls** behind an average (the records we ingest) |
+| `GET /api/v4/polls/averages/{averageId}/timeseries` | The average over time (not needed for ingestion) |
+| `GET /api/v4/polls/base_data/{pollsters,sponsors,modes,populations,offices,geographies,types,internals}` | Reference lists for normalization |
+| `GET /api/v4/me`, `/health` | Auth check / liveness (`/health` is public) |
+
+### 2. Senate polling data?
+**Yes (structurally confirmed).** The averages metadata carries `office` + `state`, so Senate contests are
+selectable by `office = U.S. Senate`, `state ∈ {GA,NC,ME,MI,NH,TX,OH,IA}`. Exact 2026 Senate coverage
+and per-race poll counts need credentials to enumerate (Step 0.6), but the live, current API supports it.
+
+### 3. Fields returned (from the public docs reference)
+`pollster`, `grade`, `sample` (size), `population`, `mode`, `sponsor`, `url`, `start_date`, `end_date`,
+`candidate`, `party`, `answer` (the pct), `office`, `state`, `race`, `average`.
+
+### 4. Mapping to our existing `Poll` entity — near 1:1
+| DDHQ | → `Poll` | Transform |
+|------|----------|-----------|
+| `pollster` | `pollster` | direct |
+| `grade` | `pollster_grade` | direct (map numeric→letter if needed) **— restores quality weighting lost with 538** |
+| `sample` | `sample_size` | direct |
+| `population` | `population` | map → `LV/RV/A/V` |
+| `start_date` / `end_date` | `field_start` / `field_end` | parse date |
+| `mode` | `mode` | direct |
+| `sponsor` | `sponsor` | direct |
+| `url` | `url` | direct **— original-source provenance** |
+| `candidate`+`party`+`answer` | `margin_dem_minus_rep` | `DEM answer − REP answer` |
+| `office`+`state` | `race_id` | `U.S. Senate` + state → `BATTLEGROUND_RACES` |
+| — | `poll_id` | DDHQ poll id, else existing deterministic key |
+| — | `house_effect_adj` | null (optional) |
+
+**No `Poll` schema change needed.** DDHQ even supplies `grade` and `url`, which the synthetic data omitted.
+
+### 5. Obtaining trial access
+- Auth model: **OAuth2 client-credentials** (client id/secret → bearer token). `/health` is public; all data is gated.
+- Access: **subscription** with a **trial** signal present; **pricing is not public** (login/contact).
+- Action required (only the account holder can): **request credentials** from DDHQ (sales/support), stating
+  the specific endpoints and intended non-commercial use. Draft email below.
+
+### 6. Draft access-request email
+> *(Written for: DDHQ sales / API-access team. Review and send from your own account.)*
+
+```
+To: sales@decisiondeskhq.com        (confirm address via docs.decisiondeskhq.com / their contact form)
+Subject: API trial access request — polling data (v4) for an independent forecasting project
+
+Hello,
+
+I'm an independent developer building a personal, non-commercial U.S. Senate
+forecasting dashboard, and I'd like to evaluate the DecisionDeskHQ API for real
+polling data.
+
+Specifically I'm interested in the v4 polling endpoints:
+  - GET /api/v4/polls/averages/metadata
+  - GET /api/v4/polls/averages/{averageId}/polls
+for 2026 U.S. Senate contests (a handful of battleground states to start).
+
+Intended use: ingest individual poll records into my own aggregation and
+Monte Carlo pipeline and display aggregated forecasts, with full attribution to
+DecisionDeskHQ and to the original pollsters (I store each poll's source URL).
+This is a portfolio/learning project, not a commercial product.
+
+Could you let me know:
+  1. Whether a trial or low-tier / non-commercial plan is available, and its terms;
+  2. Pricing for the smallest tier that includes the polling endpoints above;
+  3. How to obtain OAuth2 client credentials to begin testing.
+
+Happy to share more about the project. Thank you very much.
+
+Aditya Botta
+adityabotta87@gmail.com
+```
+
+### 7. Step 0.6 verification checklist (run once credentials are in hand)
+Goal: confirm Senate coverage, field fidelity, and clean mapping **before** building the adapter.
+
+- [ ] **Auth:** `POST /api/v4/oauth/token` with client id/secret → receive bearer token; `GET /api/v4/me` → 200.
+- [ ] **Enumerate:** `GET /polls/averages/metadata`; filter `office = U.S. Senate`, cycle/year 2026,
+      `state ∈ {GA,NC,ME,MI,NH,TX,OH,IA}`; record each `averageId`. **Confirm all 8 battlegrounds are present.**
+- [ ] **Fetch polls:** `GET /polls/averages/{averageId}/polls` for Georgia; inspect the JSON shape.
+- [ ] **Field audit:** confirm `pollster, grade, sample, population, mode, sponsor, url, start_date,
+      end_date, candidate, party, answer` are present and populated.
+- [ ] **Margin:** confirm each poll exposes DEM and REP `answer` pct (via `party`) to compute `DEM − REP`;
+      handle 3-way / independents (NE-style) and RCV first-choice (ME/AK).
+- [ ] **Grade format:** note whether `grade` is a letter (feeds `quality_weight` directly) or numeric (needs a map).
+- [ ] **Population values:** confirm they map cleanly to `LV/RV/A/V`.
+- [ ] **Coverage & recency:** count polls per battleground; confirm recent `end_date`s exist.
+- [ ] **Provenance:** confirm `url` links to the original pollster release.
+- [ ] **Dedup:** confirm a stable per-poll id, or that `(race, pollster, field_end, population)` is unique enough
+      for the existing deterministic `poll_id`.
+- [ ] **Operational:** check pagination, rate limits (headers/docs), token expiry, and **terms of use /
+      attribution** requirements.
+- [ ] **Dry-run map:** transform one Georgia poll into a `Poll` dict on paper (no DB) to confirm 1:1 fit.
+- [ ] **Record** the granted tier/price for the architecture decision.
+
+**If all boxes pass → DDHQ is confirmed primary; proceed to build the DDHQ `PollSource` adapter.**
+
