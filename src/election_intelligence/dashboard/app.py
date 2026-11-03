@@ -48,11 +48,14 @@ def _load_data() -> dict[str, Any]:
         "forecasts": [],
         "aggregates": [],
         "polls_loaded": 0,
+        "last_refreshed": None,
     }
 
     db = Database(read_only=True)
     try:
         data["polls_loaded"] = db.polls.count()  # first access -> connects
+        refreshed = db.client.fetch_one("SELECT max(ingested_at) AS t FROM polls")
+        data["last_refreshed"] = refreshed["t"] if refreshed else None
         run = db.simulation_runs.latest()
         data["run"] = run
         if run is not None:
@@ -74,6 +77,20 @@ def _load_data() -> dict[str, Any]:
     finally:
         db.close()
     return data
+
+
+def _render_banner(st: Any, data: dict[str, Any]) -> None:
+    polls = data.get("polls_loaded", 0)
+    refreshed = data.get("last_refreshed")
+    if refreshed is not None:
+        timestamp = refreshed.strftime("%Y-%m-%d %H:%M %Z") or refreshed.isoformat()
+    else:
+        timestamp = "unknown"
+    st.success(
+        "**🟢 Real Polling Data**\n\n"
+        "Data source: **Wikipedia MediaWiki polling tables**\n\n"
+        f"Last refreshed: **{timestamp}**  ·  Polls ingested: **{polls:,}**"
+    )
 
 
 def _render_control_and_seats(st: Any, result: Any) -> None:
@@ -185,7 +202,8 @@ Polls for the eight Senate battleground states (GA, NC, ME, MI, NH, TX, OH, IA)
 are validated (battleground-only, no post-election dates, plausible margins and
 sample sizes) and stored in DuckDB. Margins are expressed as **D − R** in points.
 
-> The bundled sample polls are **synthetic development data**, not real polls.
+> Polling data is ingested automatically from **Wikipedia MediaWiki polling
+> tables** (CC-BY-SA), selecting each race's current general-election matchup.
 
 ### Poll weighting
 Each poll's weight is the product of three factors:
@@ -222,7 +240,8 @@ simulations in which each party controls. Runs are reproducible by random seed.
 - Only the eight battlegrounds are simulated; all other seats are a fixed
   baseline (48 R / 44 D — the 53-47 Senate minus the battlegrounds' current holders).
 - Errors are Normal (no fat tails); national σ = 3.0, base polling miss = 3.5 pt.
-- The bundled polling data is synthetic.
+- Polls are transcribed from Wikipedia (community-maintained); pollster grades
+  come from a static table, not a live ratings feed.
 
 ### Limitations
 - **No fundamentals model** (polls only) and **no hierarchical pooling**.
@@ -275,16 +294,8 @@ def main() -> None:
     st.title("2026 Senate Control Intelligence")
     st.caption(f"v{__version__} · read-only forecast dashboard")
 
-    st.warning(
-        "**⚠️ Demo Mode**\n\n"
-        "This release uses **synthetic polling data** for forecasting-engine "
-        "validation.\n\n"
-        "The forecasting pipeline, poll aggregation, forecast engine, and Monte "
-        "Carlo simulation are **real**.\n\n"
-        "Live polling integration is planned for a future release."
-    )
-
     data = _load_data()
+    _render_banner(st, data)
 
     dashboard_tab, methodology_tab = st.tabs(["Dashboard", "Methodology"])
     with dashboard_tab:
