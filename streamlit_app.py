@@ -26,13 +26,25 @@ if str(_SRC) not in sys.path:
 import streamlit as st
 
 
+# Tables cleared before a rebuild (FK-safe order: children before parents).
+_REBUILD_TABLES = (
+    "simulation_results",
+    "simulation_runs",
+    "state_forecasts",
+    "poll_aggregates",
+    "polls",
+)
+
+
 @st.cache_resource(show_spinner=False)
 def _bootstrap_real_data() -> str:
-    """Populate the database with real Wikipedia polls once per container.
+    """Refresh the database with real Wikipedia polls, once per container.
 
-    Idempotent: if a simulation run already exists, it does nothing. Uses only
-    the existing pipeline engines. Resilient: a failed fetch leaves the database
-    untouched and the dashboard shows its no-data guidance rather than crashing.
+    Fetches Wikipedia *first*, so a failed fetch leaves any existing data intact.
+    On success it **replaces** prior data (so a previous deploy's synthetic
+    database, which Streamlit Cloud may keep on reused storage, cannot linger)
+    and recomputes forecasts + simulation. Uses only the existing pipeline
+    engines; runs once per container via the cache.
     """
     from datetime import date
 
@@ -45,20 +57,24 @@ def _bootstrap_real_data() -> str:
     from election_intelligence.forecast import ForecastEngine
     from election_intelligence.simulate import MonteCarloEngine
 
+    # Fetch before touching the database so a failure keeps the last good data.
+    try:
+        polls = WikipediaPollSource().fetch()
+    except Exception:  # noqa: BLE001 - never crash the app on a fetch error
+        return "fetch-failed"
+    if not polls:
+        return "no-polls"
+
     db = Database()
     try:
         db.migrate()
-        if db.simulation_runs.count() > 0:
-            return "existing"
         if db.senate_races.count() == 0:
             SeedLoader(db).load_all()
 
-        try:
-            PollIngestor(db).ingest(WikipediaPollSource().fetch())
-        except Exception:  # noqa: BLE001 - never crash the app on a fetch error
-            return "fetch-failed"
-        if db.polls.count() == 0:
-            return "no-polls"
+        # Replace any prior polls/forecasts/runs (incl. a persisted synthetic DB).
+        for table in _REBUILD_TABLES:
+            db.client.run(f"DELETE FROM {table}")
+        PollIngestor(db).ingest(polls)
 
         engine = ForecastEngine()
         forecast_date = date.today()
