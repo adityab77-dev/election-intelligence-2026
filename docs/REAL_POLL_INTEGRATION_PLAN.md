@@ -379,3 +379,28 @@ Goal: confirm Senate coverage, field fidelity, and clean mapping **before** buil
 
 **If all boxes pass → DDHQ is confirmed primary; proceed to build the DDHQ `PollSource` adapter.**
 
+---
+
+## Decision-Gate Determination — DDHQ Pro ($9.99)
+
+**Question:** does the $9.99 "DDHQ Pro" subscription include the polling API endpoints + OAuth credentials?
+**Determination (2026-11-02): almost certainly NO** — confidence high.
+
+Evidence:
+- The API is a **separate B2B product**: dedicated host `resultsapi.decisiondeskhq.com`, OAuth2
+  client-credentials, and a ReadMe.io developer hub whose config carries `enterprise_notes`,
+  `salesforce.account_id`, `trial_ends_at`, "API keys" — hallmarks of sales-driven enterprise licensing.
+- DDHQ's `/products` page frames the API under **enterprise** with a **`/contact` (sales)** path.
+- **"DDHQ Pro" ($9.99)** lives on the consumer site `votes.decisiondeskhq.com` — a reader/content
+  subscription (premium forecasts, ad-free), a different product class from programmatic API access.
+- No public page states Pro includes API/OAuth; consumer content subs don't grant API credentials.
+- Caveat: the Pro signup feature list itself returned 429 (rate-limited) during probing, so this rests on
+  strong structural evidence rather than a direct quote. Definitive confirmation = read the Pro signup
+  feature list or ask DDHQ one line.
+
+### Final decision (locked)
+- **V1 implementation source: Wikipedia MediaWiki API.**
+- **DDHQ remains the preferred future source** if affordable (enterprise) API access becomes available.
+- **Architecture stays pluggable** (`PollSource` interface) so DDHQ can later replace Wikipedia with
+  minimal code changes — no change to aggregation/forecast/MC/dashboard/`polls` schema.
+
