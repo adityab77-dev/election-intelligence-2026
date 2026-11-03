@@ -9,8 +9,8 @@ Fill in the URLs after deployment, then run the verification checks and smoke te
 
 ## Links
 
-- **GitHub repository:** `https://github.com/<your-username>/election-intelligence-2026`
-- **Streamlit app (public):** `https://<subdomain>.streamlit.app`
+- **GitHub repository:** https://github.com/adityab77-dev/election-intelligence-2026
+- **Streamlit app (public):** `https://<subdomain>.streamlit.app`  *(fill in after deploy)*
 
 ## Deployment verification checks
 
