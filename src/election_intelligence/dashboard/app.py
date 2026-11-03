@@ -275,6 +275,15 @@ def main() -> None:
     st.title("2026 Senate Control Intelligence")
     st.caption(f"v{__version__} · read-only forecast dashboard")
 
+    st.warning(
+        "**⚠️ Demo Mode**\n\n"
+        "This release uses **synthetic polling data** for forecasting-engine "
+        "validation.\n\n"
+        "The forecasting pipeline, poll aggregation, forecast engine, and Monte "
+        "Carlo simulation are **real**.\n\n"
+        "Live polling integration is planned for a future release."
+    )
+
     data = _load_data()
 
     dashboard_tab, methodology_tab = st.tabs(["Dashboard", "Methodology"])
