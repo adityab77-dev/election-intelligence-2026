@@ -16,6 +16,7 @@ Run locally with:  ``streamlit run streamlit_app.py``
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 
 # Make the src-layout package importable without an editable install.
@@ -94,9 +95,41 @@ def _bootstrap_real_data() -> str:
         db.close()
 
 
-# Bootstrap before any Streamlit UI command runs (no UI emitted here, so the
-# dashboard's st.set_page_config remains the first UI call).
+@st.cache_data(ttl=300, show_spinner=False)
+def _refresh_results(_bucket: int) -> str:
+    """Pull Wikipedia election results and recompute live probabilities.
+
+    TTL-cached on a 5-minute time bucket, so it re-runs at most every ~5 minutes
+    while the app is active. A live (regime="live") run is created only once real
+    results exist; until then the dashboard stays poll-based.
+    """
+    from election_intelligence.data.ingestion.results import (
+        ResultsIngestor,
+        WikipediaResultsSource,
+    )
+    from election_intelligence.data.storage import Database
+    from election_intelligence.live import run_live_update
+
+    db = Database()
+    try:
+        if db.state_forecasts.count() == 0:
+            return "no-forecast"
+        try:
+            report = ResultsIngestor(db).ingest_source(WikipediaResultsSource())
+        except Exception:  # noqa: BLE001
+            return "fetch-failed"
+        if report.snapshots == 0:
+            return "no-results-yet"
+        run_live_update(db)
+        return "updated"
+    finally:
+        db.close()
+
+
+# Bootstrap polls once, then refresh results (throttled to ~5 min) before any
+# Streamlit UI command runs, so st.set_page_config remains the first UI call.
 _bootstrap_real_data()
+_refresh_results(int(time.time() // 300))
 
 from election_intelligence.dashboard.app import main  # noqa: E402
 

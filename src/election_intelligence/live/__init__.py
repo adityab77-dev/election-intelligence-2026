@@ -1,10 +1,13 @@
-"""Election-night live regime (Phase 10 — Election-Night Logic).
+"""Election-night live regime (Phase E).
 
-County-level projection of outstanding ballots by vote method, swing learning,
-prior fade by vote completeness, and guardrails. Feeds the same Monte Carlo
-engine as the pre-election regime. Deterministic; no LLM. No logic implemented yet.
+Blends poll forecasts with real results by percent reporting, then reruns the
+unchanged Monte Carlo engine. The aggregation, forecast, and Monte Carlo engines
+are not modified — only the per-state inputs change.
 """
 
 from __future__ import annotations
 
-__all__: list[str] = []
+from election_intelligence.live.results_blend import BlendConfig, blend_forecast
+from election_intelligence.live.update_engine import run_live_update
+
+__all__ = ["BlendConfig", "blend_forecast", "run_live_update"]

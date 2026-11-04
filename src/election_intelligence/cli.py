@@ -128,6 +128,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     simulate.set_defaults(func=_cmd_simulate)
 
+    refresh_results = subparsers.add_parser(
+        "refresh-results",
+        help="Ingest Wikipedia election results and recompute live probabilities. [Phase E]",
+    )
+    refresh_results.set_defaults(func=_cmd_refresh_results)
+
     run = subparsers.add_parser(
         "run",
         help="Run one model tick (worker pipeline). [Phase 5-9]",
@@ -402,6 +408,41 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
                 output.run_id,
                 output.random_seed,
                 output.code_version or "unknown",
+            )
+    finally:
+        db.close()
+    return 0
+
+
+def _cmd_refresh_results(args: argparse.Namespace) -> int:
+    """Ingest Wikipedia election results, then recompute live probabilities."""
+    from election_intelligence.data.ingestion.results import (
+        ResultsIngestor,
+        WikipediaResultsSource,
+    )
+    from election_intelligence.data.storage import Database
+    from election_intelligence.live import run_live_update
+
+    db = Database()
+    try:
+        db.migrate()
+        logger.info("fetching election results from Wikipedia...")
+        report = ResultsIngestor(db).ingest_source(WikipediaResultsSource())
+        logger.info(
+            "ingested %d snapshot(s), %d candidate row(s), skipped %d",
+            report.snapshots, report.results, report.skipped,
+        )
+        output = run_live_update(db, code_version=_git_short_sha())
+        if output is None:
+            logger.warning(
+                "no live update produced — run 'load-polls' and 'forecast' first"
+            )
+        else:
+            logger.info(
+                "Live Senate: R %.0f%% / D %.0f%% / tie %.1f%%",
+                output.prob_rep_control * 100,
+                output.prob_dem_control * 100,
+                output.prob_tie * 100,
             )
     finally:
         db.close()

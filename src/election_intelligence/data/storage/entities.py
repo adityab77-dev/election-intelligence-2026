@@ -187,17 +187,42 @@ class SimulationResult(BaseModel):
 
 
 class ElectionResult(BaseModel):
+    """A reported vote count for one candidate at a point in time (Phase E)."""
+
     result_id: str = Field(default_factory=_new_id)
     race_id: str
-    candidate_id: str
+    state_code: str | None = None
+    county_fips: str | None = None
+    candidate_name: str
+    party: Party | None = None
     votes: int = 0
-    pct_expected_vote: float | None = None
+    vote_share: float | None = None
+    percent_reporting: float | None = None
     is_called: bool = False
     source: str
     reported_at: datetime
     quarantined: bool = False
     quarantine_reason: str | None = None
     ingested_at: datetime = Field(default_factory=_utcnow)
+
+
+class ReportingSnapshot(BaseModel):
+    """A race-level results roll-up captured at one point in time (Phase E)."""
+
+    snapshot_id: str = Field(default_factory=_new_id)
+    race_id: str
+    source: str
+    reported_at: datetime
+    percent_reporting: float = 0.0
+    total_votes: int = 0
+    dem_votes: int = 0
+    rep_votes: int = 0
+    other_votes: int = 0
+    margin: float | None = None
+    leader_party: Party | None = None
+    is_called: bool = False
+    called_party: Party | None = None
+    created_at: datetime = Field(default_factory=_utcnow)
 
 
 __all__ = [
@@ -216,4 +241,5 @@ __all__ = [
     "StateForecast",
     "SimulationResult",
     "ElectionResult",
+    "ReportingSnapshot",
 ]

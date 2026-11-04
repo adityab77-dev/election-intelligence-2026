@@ -112,6 +112,7 @@ def _load_data() -> dict[str, Any]:
     data: dict[str, Any] = {
         "error": None, "run": None, "result": None, "forecasts": [],
         "aggregates": [], "polls_loaded": 0, "last_refreshed": None,
+        "snapshots": [], "live_timeline": [], "live_mode": False,
     }
     db = Database(read_only=True)
     try:
@@ -122,6 +123,7 @@ def _load_data() -> dict[str, Any]:
         data["run"] = run
         if run is not None:
             data["result"] = db.simulation_results.get(run.run_id)
+            data["live_mode"] = run.regime.value == "live"
         aggregator = PollAggregator()
         for code, race_id in BATTLEGROUND_RACES.items():
             forecast = db.state_forecasts.latest_for_race(race_id)
@@ -130,6 +132,15 @@ def _load_data() -> dict[str, Any]:
             aggregate = aggregator.aggregate_race(db, race_id, state_code=code)
             if aggregate is not None:
                 data["aggregates"].append(aggregate)
+            snapshot = db.reporting_snapshots.latest_for_race(race_id)
+            if snapshot is not None:
+                data["snapshots"].append((code, snapshot))
+        data["live_timeline"] = db.client.fetch_all(
+            "SELECT r.created_at AS t, res.prob_dem_control AS dem, "
+            "res.prob_rep_control AS rep, res.prob_tie AS tie "
+            "FROM simulation_runs r JOIN simulation_results res ON r.run_id = res.run_id "
+            "WHERE r.regime = 'live' ORDER BY r.created_at"
+        )
     except Exception as exc:  # noqa: BLE001
         data["error"] = (
             f"Could not read the database ({exc}). The forecast is still being "
@@ -321,6 +332,75 @@ def _render_state_details(st: Any, forecasts: list[Any]) -> None:
     st.markdown(f'<div class="ei-row">{cards}</div>', unsafe_allow_html=True)
 
 
+def _render_live_results(st: Any, data: dict[str, Any]) -> None:
+    import pandas as pd
+
+    st.markdown("## Live Election Results")
+    st.caption("Source: Wikipedia election results")
+
+    snapshots = data.get("snapshots", [])
+    if not snapshots:
+        st.info(
+            "No results reported yet — the forecast is **poll-based**. This view "
+            "fills in automatically as Wikipedia's result tables are populated "
+            "during counting."
+        )
+        return
+
+    result = data.get("result")
+    if data.get("live_mode") and result is not None:
+        st.markdown("#### Live Senate control (polls + counted votes)")
+        st.markdown(
+            '<div class="ei-row">'
+            f'<div class="ei-prob" style="background:{DEM}"><div class="lbl">Democratic</div>'
+            f'<div class="big">{result.prob_dem_control * 100:.0f}%</div></div>'
+            f'<div class="ei-prob" style="background:{REP}"><div class="lbl">Republican</div>'
+            f'<div class="big">{result.prob_rep_control * 100:.0f}%</div></div>'
+            f'<div class="ei-prob" style="background:{TIE}"><div class="lbl">50-50 tie</div>'
+            f'<div class="big">{_tie_probability(result) * 100:.1f}%</div></div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("#### Reporting by state")
+    rows = ""
+    for code, snap in sorted(snapshots, key=lambda cs: cs[1].percent_reporting, reverse=True):
+        leader = snap.leader_party.value[0] if snap.leader_party else "—"
+        lead_color = DEM if leader == "D" else REP
+        call = (
+            f'<span class="ei-chip" style="background:{lead_color}">CALLED {leader}</span>'
+            if snap.is_called else '<span class="mut">—</span>'
+        )
+        rows += (
+            "<tr>"
+            f"<td><b>{_state_name(code)}</b></td>"
+            f"<td>{snap.percent_reporting:.0f}%</td>"
+            f'<td style="color:{DEM}">{snap.dem_votes:,}</td>'
+            f'<td style="color:{REP}">{snap.rep_votes:,}</td>'
+            f'<td style="color:{lead_color};font-weight:700">{_fmt_margin(snap.margin or 0.0)}</td>'
+            f"<td>{call}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<table class="ei"><thead><tr><th>State</th><th>Reporting</th>'
+        "<th>Dem votes</th><th>Rep votes</th><th>Margin</th><th>Call</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table>",
+        unsafe_allow_html=True,
+    )
+
+    timeline = data.get("live_timeline", [])
+    if len(timeline) >= 2:
+        st.markdown("#### Senate control over time")
+        frame = pd.DataFrame(
+            {
+                "time": [r["t"] for r in timeline],
+                "Democratic": [float(r["dem"]) * 100 for r in timeline],
+                "Republican": [float(r["rep"]) * 100 for r in timeline],
+            }
+        ).set_index("time")
+        st.line_chart(frame, color=[DEM, REP])
+
+
 def _render_methodology(st: Any) -> None:
     st.header("Methodology")
     st.markdown(
@@ -397,12 +477,31 @@ def main() -> None:
     st.markdown(CSS, unsafe_allow_html=True)
 
     data = _load_data()
-    dashboard_tab, methodology_tab = st.tabs(["Forecast", "Methodology"])
-    with dashboard_tab:
+    forecast_tab, live_tab, methodology_tab = st.tabs(
+        ["Forecast", "Live Results", "Methodology"]
+    )
+    with forecast_tab:
         _render_dashboard(st, data)
+    with live_tab:
+        if data.get("error"):
+            st.error(data["error"])
+        else:
+            _render_live_results(st, data)
     with methodology_tab:
         _render_methodology(st)
     st.caption(f"2026 Senate Control Intelligence · v{__version__} · read-only")
+
+    # Auto-refresh the page every 5 minutes so live results update on their own.
+    try:
+        import streamlit.components.v1 as components
+
+        components.html(
+            "<script>setTimeout(function(){window.parent.location.reload();},"
+            "300000);</script>",
+            height=0,
+        )
+    except Exception:  # noqa: BLE001 - cosmetic; never break the page
+        pass
 
     logger.debug("rendered dashboard")
 

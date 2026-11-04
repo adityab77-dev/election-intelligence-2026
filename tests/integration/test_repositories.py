@@ -144,19 +144,20 @@ def test_simulation_run_and_result_reproducibility_fields(db: Database) -> None:
 @pytest.mark.integration
 def test_election_result_insert_and_query(db: Database) -> None:
     _seed_race(db)
-    db.candidates.insert(
-        Candidate(candidate_id="c-tx-1", race_id="TX-2026", name="Jane Doe", party="DEM")
-    )
     db.election_results.insert(
         ElectionResult(
             race_id="TX-2026",
-            candidate_id="c-tx-1",
+            state_code="TX",
+            candidate_name="Jane Doe",
+            party="DEM",
             votes=12_345,
-            pct_expected_vote=37.5,
-            source="sos",
+            vote_share=37.5,
+            percent_reporting=42.0,
+            source="wikipedia",
             reported_at=datetime(2026, 11, 3, 23, 0, tzinfo=timezone.utc),
         )
     )
     results = db.election_results.list_by_race("TX-2026")
     assert len(results) == 1
     assert results[0].votes == 12_345
+    assert results[0].party is not None

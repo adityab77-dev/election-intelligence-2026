@@ -24,6 +24,7 @@ from election_intelligence.data.storage.repositories import (
     ElectionResultRepository,
     PollAggregateRepository,
     PollRepository,
+    ReportingSnapshotRepository,
     SenateRaceRepository,
     SimulationResultRepository,
     SimulationRunRepository,
@@ -51,6 +52,7 @@ class Database:
         self.simulation_runs = SimulationRunRepository(self.client)
         self.simulation_results = SimulationResultRepository(self.client)
         self.election_results = ElectionResultRepository(self.client)
+        self.reporting_snapshots = ReportingSnapshotRepository(self.client)
 
     @property
     def path(self) -> Path:
@@ -86,6 +88,7 @@ class Database:
             "simulation_runs": self.simulation_runs,
             "simulation_results": self.simulation_results,
             "election_results": self.election_results,
+            "reporting_snapshots": self.reporting_snapshots,
         }
         return {name: repo.count() for name, repo in repos.items()}
 

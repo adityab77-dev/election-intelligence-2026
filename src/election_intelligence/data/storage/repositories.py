@@ -25,6 +25,7 @@ from election_intelligence.data.storage.entities import (
     ElectionResult,
     Poll,
     PollAggregate,
+    ReportingSnapshot,
     SenateRace,
     SimulationResult,
     SimulationRun,
@@ -228,6 +229,30 @@ class ElectionResultRepository(BaseRepository[ElectionResult]):
         return self.find("race_id = ?", [race_id])
 
 
+class ReportingSnapshotRepository(BaseRepository[ReportingSnapshot]):
+    model = ReportingSnapshot
+    table = "reporting_snapshots"
+    pk = "snapshot_id"
+
+    def list_by_race(self, race_id: str) -> list[ReportingSnapshot]:
+        return self.find("race_id = ?", [race_id])
+
+    def latest_for_race(self, race_id: str) -> ReportingSnapshot | None:
+        row = self._client.fetch_one(
+            f"SELECT * FROM {self.table} WHERE race_id = ? "
+            "ORDER BY reported_at DESC, created_at DESC LIMIT 1",
+            [race_id],
+        )
+        return self._from_row(row) if row is not None else None
+
+    def history(self, race_id: str) -> list[ReportingSnapshot]:
+        rows = self._client.fetch_all(
+            f"SELECT * FROM {self.table} WHERE race_id = ? ORDER BY reported_at ASC",
+            [race_id],
+        )
+        return [self._from_row(r) for r in rows]
+
+
 __all__ = [
     "BaseRepository",
     "StateRepository",
@@ -239,4 +264,5 @@ __all__ = [
     "SimulationRunRepository",
     "SimulationResultRepository",
     "ElectionResultRepository",
+    "ReportingSnapshotRepository",
 ]
