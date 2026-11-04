@@ -103,10 +103,7 @@ def _refresh_results(_bucket: int) -> str:
     while the app is active. A live (regime="live") run is created only once real
     results exist; until then the dashboard stays poll-based.
     """
-    from election_intelligence.data.ingestion.results import (
-        ResultsIngestor,
-        WikipediaResultsSource,
-    )
+    from election_intelligence.data.ingestion.results import ingest_all_results
     from election_intelligence.data.storage import Database
     from election_intelligence.live import run_live_update
 
@@ -115,7 +112,7 @@ def _refresh_results(_bucket: int) -> str:
         if db.state_forecasts.count() == 0:
             return "no-forecast"
         try:
-            report = ResultsIngestor(db).ingest_source(WikipediaResultsSource())
+            report = ingest_all_results(db)
         except Exception:  # noqa: BLE001
             return "fetch-failed"
         if report.snapshots == 0:

@@ -416,18 +416,15 @@ def _cmd_simulate(args: argparse.Namespace) -> int:
 
 def _cmd_refresh_results(args: argparse.Namespace) -> int:
     """Ingest Wikipedia election results, then recompute live probabilities."""
-    from election_intelligence.data.ingestion.results import (
-        ResultsIngestor,
-        WikipediaResultsSource,
-    )
+    from election_intelligence.data.ingestion.results import ingest_all_results
     from election_intelligence.data.storage import Database
     from election_intelligence.live import run_live_update
 
     db = Database()
     try:
         db.migrate()
-        logger.info("fetching election results from Wikipedia...")
-        report = ResultsIngestor(db).ingest_source(WikipediaResultsSource())
+        logger.info("fetching results (Clarity official feeds + Wikipedia fallback)...")
+        report = ingest_all_results(db)
         logger.info(
             "ingested %d snapshot(s), %d candidate row(s), skipped %d",
             report.snapshots, report.results, report.skipped,

@@ -48,4 +48,26 @@ class ResultsIngestor:
         return self.ingest(source.fetch())
 
 
-__all__ = ["ResultsIngestor", "ResultsReport"]
+def ingest_all_results(database: Database) -> ResultsReport:
+    """Ingest results using Clarity as primary and Wikipedia as fallback.
+
+    Clarity (official state JSON) is authoritative for its configured states;
+    Wikipedia covers every other battleground. A combined report is returned.
+    """
+    from election_intelligence.data.ingestion.results.clarity import (
+        CLARITY_RACE_IDS,
+        ClarityResultsSource,
+    )
+    from election_intelligence.data.ingestion.results.wikipedia import (
+        WikipediaResultsSource,
+    )
+    from election_intelligence.data.ingestion.sources.wikipedia import WIKIPEDIA_RACES
+
+    ingestor = ResultsIngestor(database)
+    clarity = ClarityResultsSource().fetch()
+    wiki_races = tuple(r for r in WIKIPEDIA_RACES if r.race_id not in CLARITY_RACE_IDS)
+    wikipedia = WikipediaResultsSource(races=wiki_races).fetch()
+    return ingestor.ingest(clarity + wikipedia)
+
+
+__all__ = ["ResultsIngestor", "ResultsReport", "ingest_all_results"]
