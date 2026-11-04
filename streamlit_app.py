@@ -126,7 +126,10 @@ def _refresh_results(_bucket: int) -> str:
 # Bootstrap polls once, then refresh results (throttled to ~5 min) before any
 # Streamlit UI command runs, so st.set_page_config remains the first UI call.
 _bootstrap_real_data()
-_refresh_results(int(time.time() // 300))
+try:
+    st.session_state["_refresh_status"] = _refresh_results(int(time.time() // 300))
+except Exception as exc:  # noqa: BLE001 - diagnostics only, never block the app
+    st.session_state["_refresh_status"] = f"error: {type(exc).__name__}: {exc}"
 
 from election_intelligence.dashboard.app import main  # noqa: E402
 

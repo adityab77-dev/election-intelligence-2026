@@ -332,19 +332,70 @@ def _render_state_details(st: Any, forecasts: list[Any]) -> None:
     st.markdown(f'<div class="ei-row">{cards}</div>', unsafe_allow_html=True)
 
 
+def _render_source_diagnostics(st: Any) -> None:
+    """Live probe of the official result feeds, shown while nothing has ingested.
+
+    Surfaces exactly what the deployment's network sees (reachability, contest
+    count, parse outcome, or the precise exception) so an empty Live Results tab
+    is debuggable without server logs. Only runs while there are no snapshots.
+    """
+    with st.expander("Data source diagnostics"):
+        status = st.session_state.get("_refresh_status")
+        if status is not None:
+            st.write(f"Last results refresh: **{status}**")
+        try:
+            from election_intelligence.data.ingestion.results import GeorgiaResultsSource
+            from election_intelligence.data.ingestion.results.clarity import (
+                CLARITY_RACES,
+                ClarityResultsSource,
+            )
+        except Exception as exc:  # noqa: BLE001
+            st.write(f"❌ could not import result sources: {exc}")
+            return
+
+        src = ClarityResultsSource()
+        for race in CLARITY_RACES:
+            try:
+                contests = src._fetch_summary(race)
+                parsed = src.parse_senate(contests, race.race_id, race.state)
+                if parsed is not None:
+                    snap = parsed.snapshot
+                    st.write(
+                        f"✅ Clarity {race.race_id}: {snap.percent_reporting:.0f}% "
+                        f"reporting · {snap.total_votes:,} votes · "
+                        f"leader {snap.leader_party.value if snap.leader_party else '—'}"
+                    )
+                else:
+                    st.write(
+                        f"⚠️ Clarity {race.race_id}: feed reachable "
+                        f"({len(contests)} contests) but no Senate contest parsed"
+                    )
+            except Exception as exc:  # noqa: BLE001
+                st.write(f"❌ Clarity {race.race_id}: {type(exc).__name__}: {exc}")
+
+        try:
+            georgia = GeorgiaResultsSource().fetch()
+            st.write(f"Georgia SoS: {len(georgia)} race(s) (empty until GA publishes)")
+        except Exception as exc:  # noqa: BLE001
+            st.write(f"❌ Georgia SoS: {type(exc).__name__}: {exc}")
+
+
 def _render_live_results(st: Any, data: dict[str, Any]) -> None:
     import pandas as pd
 
     st.markdown("## Live Election Results")
-    st.caption("Source: Wikipedia election results")
+    st.caption(
+        "Sources: official state feeds (Iowa Clarity, Georgia SoS) · Wikipedia fallback"
+    )
 
     snapshots = data.get("snapshots", [])
     if not snapshots:
         st.info(
-            "No results reported yet — the forecast is **poll-based**. This view "
-            "fills in automatically as Wikipedia's result tables are populated "
-            "during counting."
+            "No official results ingested yet — the forecast is **poll-based**. "
+            "Iowa (Clarity) and Georgia (SoS) feed in automatically as counties "
+            "report; the other battlegrounds fall back to Wikipedia result tables."
         )
+        _render_source_diagnostics(st)
         return
 
     result = data.get("result")
