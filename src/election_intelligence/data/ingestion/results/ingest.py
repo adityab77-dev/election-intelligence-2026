@@ -37,6 +37,20 @@ class ResultsIngestor:
                 report.skipped += 1
                 logger.warning("rejected snapshot for %s (bad values)", snapshot.race_id)
                 continue
+            # Hardening: reject a snapshot whose total drops below the last good
+            # one (a transient feed glitch), unless the race has been called.
+            previous = self._db.reporting_snapshots.latest_for_race(snapshot.race_id)
+            if (
+                previous is not None
+                and snapshot.total_votes < previous.total_votes
+                and not snapshot.is_called
+            ):
+                report.skipped += 1
+                logger.warning(
+                    "rejected %s: total votes decreased %d -> %d",
+                    snapshot.race_id, previous.total_votes, snapshot.total_votes,
+                )
+                continue
             self._db.reporting_snapshots.upsert(snapshot)
             report.snapshots += 1
             for candidate in item.candidates:
@@ -49,25 +63,30 @@ class ResultsIngestor:
 
 
 def ingest_all_results(database: Database) -> ResultsReport:
-    """Ingest results using Clarity as primary and Wikipedia as fallback.
+    """Ingest results from official sources first, Wikipedia as fallback.
 
-    Clarity (official state JSON) is authoritative for its configured states;
-    Wikipedia covers every other battleground. A combined report is returned.
+    Official feeds (Clarity for Iowa, Georgia SoS) are authoritative for their
+    states; Wikipedia covers every other battleground. Combined report returned.
     """
     from election_intelligence.data.ingestion.results.clarity import (
         CLARITY_RACE_IDS,
         ClarityResultsSource,
+    )
+    from election_intelligence.data.ingestion.results.georgia import (
+        GEORGIA_RACE_IDS,
+        GeorgiaResultsSource,
     )
     from election_intelligence.data.ingestion.results.wikipedia import (
         WikipediaResultsSource,
     )
     from election_intelligence.data.ingestion.sources.wikipedia import WIKIPEDIA_RACES
 
+    official = CLARITY_RACE_IDS | GEORGIA_RACE_IDS
     ingestor = ResultsIngestor(database)
-    clarity = ClarityResultsSource().fetch()
-    wiki_races = tuple(r for r in WIKIPEDIA_RACES if r.race_id not in CLARITY_RACE_IDS)
-    wikipedia = WikipediaResultsSource(races=wiki_races).fetch()
-    return ingestor.ingest(clarity + wikipedia)
+    results = ClarityResultsSource().fetch() + GeorgiaResultsSource().fetch()
+    wiki_races = tuple(r for r in WIKIPEDIA_RACES if r.race_id not in official)
+    results += WikipediaResultsSource(races=wiki_races).fetch()
+    return ingestor.ingest(results)
 
 
 __all__ = ["ResultsIngestor", "ResultsReport", "ingest_all_results"]

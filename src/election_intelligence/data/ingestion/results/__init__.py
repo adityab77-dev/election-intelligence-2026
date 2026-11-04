@@ -12,6 +12,10 @@ from election_intelligence.data.ingestion.results.clarity import (
     CLARITY_RACE_IDS,
     ClarityResultsSource,
 )
+from election_intelligence.data.ingestion.results.georgia import (
+    GEORGIA_RACE_IDS,
+    GeorgiaResultsSource,
+)
 from election_intelligence.data.ingestion.results.ingest import (
     ResultsIngestor,
     ResultsReport,
@@ -29,4 +33,6 @@ __all__ = [
     "ClarityResultsSource",
     "CLARITY_RACES",
     "CLARITY_RACE_IDS",
+    "GeorgiaResultsSource",
+    "GEORGIA_RACE_IDS",
 ]
