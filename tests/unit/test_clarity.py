@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("pandas")  # ClarityResultsSource imports the results package
 
 from election_intelligence.data.ingestion.results import ClarityResultsSource  # noqa: E402
+from election_intelligence.data.ingestion.results.clarity import decode_body  # noqa: E402
 from election_intelligence.data.storage.entities import Party  # noqa: E402
 
 SENATE = {
@@ -50,3 +51,18 @@ def test_winner_flag_marks_called() -> None:
     result = ClarityResultsSource().parse_senate([called], "IA-2026", "IA")
     assert result.snapshot.is_called
     assert result.snapshot.called_party is Party.DEM
+
+
+@pytest.mark.unit
+def test_decode_body_inflates_gzip() -> None:
+    """Clarity serves summary.json gzip-encoded; decode_body must inflate it."""
+    import gzip
+
+    payload = '[{"SUBCAT": "United States Senate"}]'
+    gzipped = gzip.compress(payload.encode("utf-8"))
+    # Honored via the Content-Encoding header...
+    assert decode_body(gzipped, "gzip") == payload
+    # ...and sniffed from the magic bytes even without the header.
+    assert decode_body(gzipped, None) == payload
+    # Plain bodies pass through unchanged.
+    assert decode_body(payload.encode("utf-8"), None) == payload

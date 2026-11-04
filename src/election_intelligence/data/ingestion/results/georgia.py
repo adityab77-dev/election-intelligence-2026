@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from election_intelligence.data.ingestion.results.base import RaceResults, ResultsSource
+from election_intelligence.data.ingestion.results.clarity import decode_body
 from election_intelligence.data.ingestion.results.wikipedia import _party, _snapshot_id
 from election_intelligence.data.storage.entities import ElectionResult, Party, ReportingSnapshot
 from election_intelligence.exceptions import IngestionError
@@ -82,7 +83,7 @@ class GeorgiaResultsSource(ResultsSource):
         context = ssl.create_default_context()
         try:
             with urllib.request.urlopen(request, timeout=self._timeout, context=context) as resp:
-                body = resp.read().decode("utf-8")
+                body = decode_body(resp.read(), resp.headers.get("Content-Encoding"))
         except OSError as exc:
             raise IngestionError(f"failed to fetch {url}") from exc
         if not body.strip():  # HTTP 204 / empty -> no results published yet

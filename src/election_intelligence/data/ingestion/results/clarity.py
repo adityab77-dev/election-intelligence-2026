@@ -18,9 +18,11 @@ No forecasting logic here; emits the same ``RaceResults`` as the Wikipedia sourc
 
 from __future__ import annotations
 
+import gzip
 import json
 import ssl
 import urllib.request
+import zlib
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
@@ -59,6 +61,28 @@ def _map_party(code: object) -> Party | None:
     return _PARTY_CODES.get(str(code).strip().upper())
 
 
+def decode_body(raw: bytes, content_encoding: str | None = None) -> str:
+    """Decode an HTTP body, transparently inflating gzip/deflate payloads.
+
+    Clarity/Scytl serves ``summary.json`` with ``Content-Encoding: gzip`` (and
+    urllib does not auto-decompress). We honor the header and also sniff the
+    gzip magic bytes, so a pre-compressed file served without the header still
+    decodes. Falls back to the raw bytes if decompression fails.
+    """
+    enc = (content_encoding or "").lower()
+    if enc == "gzip" or raw[:2] == b"\x1f\x8b":
+        try:
+            raw = gzip.decompress(raw)
+        except OSError:
+            pass
+    elif enc == "deflate":
+        try:
+            raw = zlib.decompress(raw)
+        except zlib.error:
+            raw = zlib.decompress(raw, -zlib.MAX_WBITS)
+    return raw.decode("utf-8")
+
+
 class ClarityResultsSource(ResultsSource):
     """Fetches official Senate results from state Clarity JSON feeds."""
 
@@ -75,7 +99,7 @@ class ClarityResultsSource(ResultsSource):
         context = ssl.create_default_context()
         try:
             with urllib.request.urlopen(request, timeout=self._timeout, context=context) as resp:
-                return resp.read().decode("utf-8")
+                return decode_body(resp.read(), resp.headers.get("Content-Encoding"))
         except OSError as exc:
             raise IngestionError(f"failed to fetch {url}") from exc
 
@@ -180,4 +204,6 @@ class ClarityResultsSource(ResultsSource):
         return RaceResults(snapshot=snapshot, candidates=candidates)
 
 
-__all__ = ["ClarityResultsSource", "ClarityRace", "CLARITY_RACES", "CLARITY_RACE_IDS"]
+__all__ = [
+    "ClarityResultsSource", "ClarityRace", "CLARITY_RACES", "CLARITY_RACE_IDS", "decode_body",
+]
